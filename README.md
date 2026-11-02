@@ -112,4 +112,4 @@ No keys or passwords are in this repository. `backend/.env` is git-ignored; `bac
 
 [Member 1 name], [Member 2 name], [Member 3 name]
 
-Source code: [GitHub link] · Presentation video: [video link]
+Source code: https://github.com/HengRatana404/angkor-stay · Presentation video: [video link]
