@@ -1,0 +1,9 @@
+# Secrets never go to GitHub
+.env
+*.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
