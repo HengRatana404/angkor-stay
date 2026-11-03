@@ -87,11 +87,12 @@ Future<void> _open(WidgetTester tester, Booking booking, _FakeBookings repo) asy
 
 void main() {
   group('customer: pay at the hotel', () {
-    testWidgets('the hold screen offers both ways to pay', (tester) async {
+    testWidgets('the hold screen offers card, QR code and the hotel', (tester) async {
       await _open(tester, _holding(), _FakeBookings());
 
       expect(find.text('How do you want to pay?'), findsOneWidget);
-      expect(find.text('Pay online and save 15%'), findsOneWidget);
+      expect(find.text('Pay by card and save 15%'), findsOneWidget);
+      expect(find.text('Pay with a QR code and save 15%'), findsOneWidget);
       expect(find.text('\$25.50 instead of \$30'), findsOneWidget);
       expect(find.text('Pay at the hotel'), findsOneWidget);
       expect(find.textContaining('No discount'), findsOneWidget);

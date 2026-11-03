@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Booking;
+use App\Models\PaymentIntent;
 use App\Payments\PaymentException;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -10,9 +11,9 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * The two automatic jobs:
- *  1. Holds that ran out are tidied up (cancelled), and any payment page is closed.
+ *  1. Holds that ran out are tidied up (cancelled), and any open payment is cancelled.
  *  2. A guest who never came is a no-show at check-out time on the day AFTER the check-in date.
- *     Online money goes back in full. If a refund fails, that booking is left alone and tried again next run.
+ *     Online money goes back in full (the payment is simulated, so a refund is a record in the database).
  */
 class BookingCleanupService
 {
@@ -29,6 +30,9 @@ class BookingCleanupService
 
         $expired = $this->expireHolds($now);
         $noShows = $this->markNoShows($now);
+
+        // Card and QR payments that nobody finished in time are marked expired.
+        PaymentIntent::pending()->where('expires_at', '<=', $now)->update(['status' => PaymentIntent::STATUS_EXPIRED]);
 
         return [
             'expired_holds' => $expired,

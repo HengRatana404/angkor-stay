@@ -53,7 +53,6 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
   late String _checkIn = widget.initial.checkInTime;
   late String _checkOut = widget.initial.checkOutTime;
   late bool _restricted = widget.initial.staffLoginRestricted;
-  late bool _demo = widget.initial.demoPaymentMode;
 
   bool _busy = false;
   String? _error;
@@ -117,7 +116,6 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
       checkOutTime: _checkOut,
       staffLoginRestricted: _restricted,
       allowedNetworks: _networkLines,
-      demoPaymentMode: _demo,
     );
 
     try {
@@ -165,14 +163,6 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
               if (n == null || n < 0 || n > 50) return 'Enter a whole number from 0 to 50';
               return _server('online_discount_percent');
             },
-          ),
-          SwitchListTile(
-            key: const Key('demo-mode'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Demo payment mode'),
-            subtitle: const Text('Online payment is faked. Use it on presentation day.'),
-            value: _demo,
-            onChanged: (v) => setState(() => _demo = v),
           ),
 
           const Divider(height: 32),

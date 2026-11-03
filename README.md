@@ -6,15 +6,15 @@ A hotel booking system with three kinds of users (guest, staff, admin). One Flut
 |---|---|---|
 | Mobile app | `mobile/` | Flutter 3, Riverpod, dio, Material 3 |
 | API | `backend/` | Laravel 13, PHP 8.3+, Sanctum tokens |
-| Database | PostgreSQL 18 | 9 tables, see `docs/database-diagram.png` |
-| API tests | `postman/` | 76 saved requests with tests |
+| Database | PostgreSQL 18 | 10 tables, see `docs/database-diagram.png` |
+| API tests | `postman/` | 80 saved requests with tests |
 | Slides and diagram | `docs/` | slides outline, `.pptx`, database diagram |
 
 ## What it does
 
-- **Guest:** register with a 6-digit email code, browse room types and photos, see "X rooms left" for chosen dates, book (room is held 5 minutes), pay online (15% off) or at the hotel, QR receipt, cancel with refund, edit profile.
+- **Guest:** register with a 6-digit email code, browse room types and photos, see "X rooms left" for chosen dates, book (room is held 5 minutes), pay online by card or QR code (15% off) or at the hotel, QR receipt, cancel with refund, edit profile.
 - **Staff:** find a booking, take payment at the desk (cash, card, KHQR), check in and check out. The staff name is saved on every payment.
-- **Admin:** dashboard (today, rooms, money, last 7 days, waiting list), room types, prices and rooms, staff accounts, settings (online discount, check-in and check-out times, allowed network, demo payment mode).
+- **Admin:** dashboard (today, rooms, money, last 7 days, waiting list), room types, prices and rooms, staff accounts, settings (online discount, check-in and check-out times, allowed network).
 
 Main rules: the room is checked before any payment, a database row lock makes the first guest win, staff and admin can only log in from allowed networks, a guest who never comes becomes a no-show at 12:00 the next day (online money is refunded).
 
@@ -48,20 +48,22 @@ Check it: open http://127.0.0.1:8000/api/health. It should say `"status":"ok"`.
 Notes:
 
 - **Emails (verify and reset codes):** by default `MAIL_MAILER=log`, so the code is written to `backend/storage/logs/laravel.log`. For real emails set the `MAIL_*` values (for example Gmail SMTP with an app password).
-- **Windows, "cURL error 60":** PHP may have no certificate list. Set `HTTP_CA_BUNDLE` in `.env` to a `ca-bundle.crt` (Git for Windows has one). Never turn certificate checks off.
 - **Accounts:** the seeded admin and staff emails are in `.env` (`SEED_ADMIN_EMAIL`, `SEED_STAFF_EMAIL`). Guests register in the app.
 
-### Online payment (sandbox only)
+### Online payment (simulated)
 
-Online payment uses the **ABA PayWay sandbox** (test money). Put your sandbox values in `.env`: `PAYWAY_MERCHANT_ID` and `PAYWAY_PUBLIC_KEY`. Automatic refunds also need the PayWay RSA public key saved as `backend/storage/app/payway_rsa_public.pem`; without it a refund fails safely and the booking is not cancelled. Stripe test keys also work (`STRIPE_SECRET=sk_test_...`), live keys are refused.
+Paying online is **simulated**: no bank is called and no real money moves, so there are no payment keys to set up. A guest can pay two ways:
 
-For a presentation without real payments, turn on **Demo payment mode** in the app (Admin, Hotel settings). The payment is then faked.
+- **Card:** any card number of 12 to 19 digits works (no bank check). What is checked: the date must be written as `MM/YY` and the card must not be expired. A card is good until the end of the month on it, so `11/26` works all through November 2026. Only the brand and the last 4 digits are saved. The full number and the CVV are never saved.
+- **QR code:** the app shows a real-format **KHQR** code (the text follows the EMV QR layout that banking apps read, with a demo merchant account, so nobody is ever paid). The guest taps "I have paid".
+
+Both ways are checked **in the database**: every payment is first saved as a row in `payment_intents`. The server re-reads that row and checks it (still open, not expired, right booking, right amount) before it confirms the booking and saves the payment. A refund (cancel, no-show) marks the payment as refunded in the database.
 
 ### Helpful commands
 
 ```bash
 php artisan hotel:network show      # who may log in as staff/admin (also: on, off, or a list of networks)
-php artisan hotel:clean-up          # free old holds, mark no-shows, refund online money
+php artisan hotel:clean-up          # free old holds, mark no-shows, refund online payments
 php artisan schedule:work           # runs hotel:clean-up every minute
 ```
 
@@ -88,8 +90,8 @@ Log in as the seeded admin or staff, or register a guest.
 ## Tests
 
 ```bash
-cd backend && php artisan test          # 326 tests (needs the angkor_stay_test database)
-cd mobile  && flutter test              # 146 tests
+cd backend && php artisan test          # 260 tests (needs the angkor_stay_test database)
+cd mobile  && flutter test              # 145 tests
 cd mobile  && flutter analyze           # no issues
 ```
 

@@ -2,14 +2,16 @@ import 'package:angkor_stay/booking/booking_repository.dart';
 import 'package:angkor_stay/core/api_error.dart';
 import 'package:angkor_stay/core/format.dart';
 import 'package:angkor_stay/core/public_settings_provider.dart';
-import 'package:angkor_stay/core/url_opener.dart';
 import 'package:angkor_stay/models/booking.dart';
 import 'package:angkor_stay/models/public_settings.dart';
 import 'package:angkor_stay/screens/booking_hold_screen.dart';
+import 'package:angkor_stay/widgets/card_formatters.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 Booking _booking({
   String status = 'pending',
@@ -20,6 +22,7 @@ Booking _booking({
   double? due,
   bool paid = false,
   String? method,
+  String? detail,
 }) =>
     Booking(
       id: 7,
@@ -40,16 +43,16 @@ Booking _booking({
       paymentChoice: choice,
       paid: paid,
       paymentMethod: method,
+      paymentDetail: detail,
       holdSecondsLeft: hold,
     );
 
 Booking _holding() => _booking();
 
-/// The booking after "pay online": 15% off, more time.
-Booking _onlineStarted({int? hold = 900}) =>
-    _booking(choice: 'online', hold: hold, percent: 15, discount: 4.5, due: 25.5);
+/// The booking after the guest started a QR payment: 15% off, more time.
+Booking _qrStarted({int? hold = 900}) => _booking(choice: 'online', hold: hold, percent: 15, discount: 4.5, due: 25.5);
 
-Booking _paid() => _booking(
+Booking _paidByCard() => _booking(
       status: 'confirmed',
       choice: 'online',
       hold: null,
@@ -58,58 +61,82 @@ Booking _paid() => _booking(
       due: 25.5,
       paid: true,
       method: 'online',
+      detail: 'Visa ending 4242',
+    );
+
+Booking _paidByQr() => _booking(
+      status: 'confirmed',
+      choice: 'online',
+      hold: null,
+      percent: 15,
+      discount: 4.5,
+      due: 25.5,
+      paid: true,
+      method: 'online',
+      detail: 'KHQR',
     );
 
 Booking _kept() => _booking(choice: 'hotel', hold: null);
+
+const _payload = '00020101021229190015angkorstay@demo52047011530384054052.5058025KH5911Angkor Stay6010Phnom Penh6304ABCD';
 
 /// A server that answers from memory and remembers what it was asked.
 class _FakePay extends BookingRepository {
   _FakePay() : super(Dio());
 
-  PayOnlineResult? onlineResult;
-  ApiError? onlineError;
-  ApiError? demoError;
-  ApiError? hotelError;
+  // card
+  Object cardResult = _paidByCard(); // a Booking, or an ApiError to throw
+  final cardCalls = <Map<String, String>>[];
 
-  /// What "check my payment" answers, one by one. When empty: "not paid yet".
+  // qr
+  QrPayment? qrResult;
+  ApiError? qrError;
+  int qrCalls = 0;
+
+  /// What "I have paid" answers, one by one. When empty: a paid booking.
   final verifyQueue = <Object>[];
-  Booking demoResult = _paid();
-
-  int onlineCalls = 0;
   int verifyCalls = 0;
-  int demoCalls = 0;
+
+  ApiError? hotelError;
   int hotelCalls = 0;
   final released = <int>[];
 
   @override
-  Future<PayOnlineResult> payOnline(int bookingId) async {
-    onlineCalls++;
-    if (onlineError != null) throw onlineError!;
-    return onlineResult ??
-        PayOnlineResult(
-          booking: _onlineStarted(),
-          mode: 'online',
-          checkoutUrl: 'https://checkout.stripe.test/pay/cs_test_1',
-          hint: 'Sandbox test card: 5156 8399 3770 6777, expiry 01/30, CVV 993.',
+  Future<Booking> payByCard(
+    int bookingId, {
+    required String number,
+    required String holder,
+    required String expiry,
+    required String cvv,
+  }) async {
+    cardCalls.add({'number': number, 'holder': holder, 'expiry': expiry, 'cvv': cvv});
+    final r = cardResult;
+    if (r is ApiError) throw r;
+    return r as Booking;
+  }
+
+  @override
+  Future<QrPayment> startQr(int bookingId) async {
+    qrCalls++;
+    if (qrError != null) throw qrError!;
+    return qrResult ??
+        QrPayment(
+          booking: _qrStarted(),
+          reference: 'AS7-K3F9QZ7M',
+          payload: _payload,
+          amount: 25.5,
+          merchant: 'Angkor Stay',
+          secondsLeft: 900,
         );
   }
 
   @override
   Future<Booking> verifyPayment(int bookingId) async {
     verifyCalls++;
-    if (verifyQueue.isEmpty) {
-      throw const ApiError('The payment is not finished yet.', statusCode: 409, code: 'payment_not_completed');
-    }
+    if (verifyQueue.isEmpty) return _paidByQr();
     final next = verifyQueue.removeAt(0);
     if (next is ApiError) throw next;
     return next as Booking;
-  }
-
-  @override
-  Future<Booking> demoPay(int bookingId) async {
-    demoCalls++;
-    if (demoError != null) throw demoError!;
-    return demoResult;
   }
 
   @override
@@ -123,30 +150,17 @@ class _FakePay extends BookingRepository {
   Future<void> release(int bookingId) async => released.add(bookingId);
 }
 
-class _Rig {
-  final _FakePay repo = _FakePay();
-  final opened = <Uri>[];
-  bool browserWorks = true;
-  AsyncValue<PublicSettings> settings = const AsyncData(
-    PublicSettings(onlineDiscountPercent: 15, checkInTime: '14:00', checkOutTime: '12:00'),
-  );
-}
-
-Future<_Rig> _open(WidgetTester tester, Booking booking, {_Rig? rig, bool settingsFail = false, int percent = 15}) async {
+Future<_FakePay> _open(WidgetTester tester, Booking booking, {bool settingsFail = false, int percent = 15}) async {
   tester.view.physicalSize = const Size(800, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
-  final r = rig ?? _Rig();
+  final repo = _FakePay();
 
   await tester.pumpWidget(ProviderScope(
     retry: (retryCount, error) => null,
     overrides: [
-      bookingRepositoryProvider.overrideWithValue(r.repo),
-      urlOpenerProvider.overrideWithValue((uri) async {
-        r.opened.add(uri);
-        return r.browserWorks;
-      }),
+      bookingRepositoryProvider.overrideWithValue(repo),
       publicSettingsProvider.overrideWith((ref) async {
         if (settingsFail) throw const ApiError('no settings');
         return PublicSettings(onlineDiscountPercent: percent, checkInTime: '14:00', checkOutTime: '12:00');
@@ -159,418 +173,373 @@ Future<_Rig> _open(WidgetTester tester, Booking booking, {_Rig? rig, bool settin
         MaterialPageRoute(builder: (_) => BookingHoldScreen(booking: booking)),
       );
   await tester.pumpAndSettle();
-  return r;
+  return repo;
 }
 
-/// Taps "Pay online" and lets everything settle.
-Future<void> _tapPayOnline(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('pay-online')));
+Future<void> _tapPayByCard(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('pay-card')));
   await tester.pumpAndSettle();
 }
 
-/// The phone goes to the browser and comes back.
-Future<void> _leaveAndReturn(WidgetTester tester) async {
-  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+Future<void> _tapPayByQr(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('pay-qr')));
+  await tester.pumpAndSettle();
+}
+
+/// Types into the card form. The formatters run, like on a real phone.
+Future<void> _fillCard(
+  WidgetTester tester, {
+  String number = '4242424242424242',
+  String holder = 'Sokha Demo',
+  String expiry = '1126',
+  String cvv = '987',
+}) async {
+  await tester.enterText(find.byKey(const Key('card-number')), number);
+  await tester.enterText(find.byKey(const Key('card-holder')), holder);
+  await tester.enterText(find.byKey(const Key('card-expiry')), expiry);
+  await tester.enterText(find.byKey(const Key('card-cvv')), cvv);
   await tester.pump();
-  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+}
+
+Future<void> _tapPay(WidgetTester tester) async {
+  await tester.ensureVisible(find.byKey(const Key('card-pay')));
+  await tester.tap(find.byKey(const Key('card-pay')));
   await tester.pumpAndSettle();
 }
+
+String _fieldText(WidgetTester tester, String key) =>
+    tester.widget<TextField>(find.byKey(Key(key))).controller!.text;
 
 void main() {
   group('the payment choices', () {
-    testWidgets('online shows the saving, worked out from the discount setting', (tester) async {
+    testWidgets('card and QR show the saving, worked out from the discount setting', (tester) async {
       await _open(tester, _holding());
 
-      expect(find.text('Pay online and save 15%'), findsOneWidget);
+      expect(find.text('Pay by card and save 15%'), findsOneWidget);
       expect(find.text('\$25.50 instead of \$30'), findsOneWidget);
+      expect(find.text('Pay with a QR code and save 15%'), findsOneWidget);
       expect(find.text('Pay at the hotel'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox()); // stop the timer
     });
 
-    testWidgets('with no discount it just says Pay online', (tester) async {
+    testWidgets('with no discount it just says Pay by card', (tester) async {
       await _open(tester, _holding(), percent: 0);
 
-      expect(find.text('Pay online'), findsOneWidget);
+      expect(find.text('Pay by card'), findsOneWidget);
+      expect(find.text('Pay with a QR code'), findsOneWidget);
       expect(find.textContaining('save'), findsNothing);
 
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('if the settings cannot be loaded, online is still offered without a number', (tester) async {
+    testWidgets('if the settings cannot be loaded, paying online is still offered without a number', (tester) async {
       await _open(tester, _holding(), settingsFail: true);
 
-      expect(find.text('Pay online'), findsOneWidget);
-      expect(find.byKey(const Key('pay-online')), findsOneWidget);
+      expect(find.text('Pay by card'), findsOneWidget);
+      expect(find.text('Pay with a QR code'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
     });
   });
 
-  group('paying online with Stripe', () {
-    testWidgets('opens the payment page in the browser and waits, with more time and the discount shown', (tester) async {
-      final rig = await _open(tester, _holding());
-      expect(find.text('5:00'), findsOneWidget);
+  group('paying by card', () {
+    testWidgets('opens a card form that shows the discounted price on the button', (tester) async {
+      await _open(tester, _holding());
+      await _tapPayByCard(tester);
 
-      await _tapPayOnline(tester);
-
-      expect(rig.repo.onlineCalls, 1);
-      expect(rig.opened, [Uri.parse('https://checkout.stripe.test/pay/cs_test_1')]);
-
-      expect(find.byKey(const Key('awaiting-card')), findsOneWidget);
-      expect(find.text('Finish paying in your browser'), findsOneWidget);
-      expect(find.byKey(const Key('payment-hint')), findsOneWidget);
-      expect(find.textContaining('5156 8399 3770 6777'), findsOneWidget); // the test card the server sent
-      expect(find.textContaining('4242'), findsNothing); // not a hard-coded Stripe card any more
-      expect(find.textContaining('Pay \$25.50'), findsOneWidget);
-
-      // The choices are gone, the countdown starts again from the server's 15 minutes.
-      expect(find.byKey(const Key('pay-online')), findsNothing);
-      expect(find.byKey(const Key('pay-at-hotel')), findsNothing);
-      expect(find.text('15:00'), findsOneWidget);
-
-      // The price shows the discount.
-      expect(find.byKey(const Key('discount-line')), findsOneWidget);
-      expect(find.text('Online discount (15%)'), findsOneWidget);
-      expect(find.text('-\$4.50'), findsOneWidget);
-      expect(find.byKey(const Key('to-pay-line')), findsOneWidget);
-      expect(find.text('\$25.50'), findsWidgets);
+      expect(find.byKey(const Key('card-form')), findsOneWidget);
+      expect(find.text('Pay \$25.50'), findsOneWidget);
+      expect(find.textContaining('Any card number works'), findsOneWidget);
+      expect(find.byKey(const Key('pay-card')), findsNothing); // the choices are gone
 
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('with no hint from the server, no hint is shown', (tester) async {
-      final rig = _Rig();
-      rig.repo.onlineResult = PayOnlineResult(
-        booking: _onlineStarted(),
-        mode: 'online',
-        checkoutUrl: 'https://checkout.payway.test/pay/AS7-ABCDEFGH',
-      );
-      await _open(tester, _holding(), rig: rig);
+    testWidgets('sends exactly what was typed and then shows the paid booking', (tester) async {
+      final repo = await _open(tester, _holding());
+      await _tapPayByCard(tester);
+      await _fillCard(tester, holder: '  Sokha Demo  ');
+      await _tapPay(tester);
 
-      await _tapPayOnline(tester);
-
-      expect(find.byKey(const Key('awaiting-card')), findsOneWidget);
-      expect(find.byKey(const Key('payment-hint')), findsNothing);
-
-      await tester.pumpWidget(const SizedBox());
-    });
-
-    testWidgets('"I have paid" asks the server and then shows the paid booking', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-      rig.repo.verifyQueue.add(_paid());
-
-      await tester.tap(find.byKey(const Key('check-payment')));
-      await tester.pumpAndSettle();
-
-      expect(rig.repo.verifyCalls, 1);
+      expect(repo.cardCalls, [
+        {'number': '4242 4242 4242 4242', 'holder': 'Sokha Demo', 'expiry': '11/26', 'cvv': '987'},
+      ]);
       expect(find.byKey(const Key('paid-card')), findsOneWidget);
-      expect(find.text('Room 101 is yours'), findsOneWidget);
+      expect(find.byKey(const Key('booking-code')), findsOneWidget);
       expect(find.text('AS-0007'), findsOneWidget);
-      expect(find.byKey(const Key('paid-text')), findsOneWidget);
-      expect(find.text('Paid \$25.50 online. You saved \$4.50 (15% off).'), findsOneWidget);
-      expect(find.text('Booked and paid'), findsOneWidget);
-
-      // No countdown, no payment buttons, only a way back.
       expect(find.byKey(const Key('countdown')), findsNothing);
-      expect(find.byKey(const Key('awaiting-card')), findsNothing);
-      expect(find.text('Release this room'), findsNothing);
-      expect(find.text('Back to rooms'), findsOneWidget);
-
-      // Twenty minutes later it is still booked.
-      await tester.pump(const Duration(minutes: 20));
-      expect(find.text('Hold ran out'), findsNothing);
-      expect(find.byKey(const Key('paid-card')), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('paid-text'))).data,
+        'Paid \$25.50 online with Visa ending 4242. You saved \$4.50 (15% off).',
+      );
     });
 
-    testWidgets('while the guest has not paid, it says so and keeps waiting', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
+    testWidgets('an expired card shows the server message under the date field and stays on the form', (tester) async {
+      final repo = await _open(tester, _holding());
+      repo.cardResult = const ApiError(
+        'This card has expired.',
+        statusCode: 422,
+        fieldErrors: {'expiry': 'This card has expired.'},
+      );
+      await _tapPayByCard(tester);
+      await _fillCard(tester, expiry: '1026');
+      await _tapPay(tester);
 
-      await tester.tap(find.byKey(const Key('check-payment')));
-      await tester.pumpAndSettle();
+      expect(find.text('This card has expired.'), findsOneWidget);
+      expect(find.byKey(const Key('card-form')), findsOneWidget);
+      expect(find.byKey(const Key('paid-card')), findsNothing);
+      expect(_fieldText(tester, 'card-number'), '4242 4242 4242 4242'); // nothing was cleared
 
-      expect(rig.repo.verifyCalls, 1);
-      expect(find.byKey(const Key('info')), findsOneWidget);
-      expect(find.textContaining('Not paid yet'), findsOneWidget);
-      expect(find.byKey(const Key('awaiting-card')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('every wrong field is marked at once', (tester) async {
+      final repo = await _open(tester, _holding());
+      repo.cardResult = const ApiError('Enter the card number.', statusCode: 422, fieldErrors: {
+        'number': 'The card number must have 12 to 19 digits.',
+        'holder': 'Enter the name on the card.',
+        'expiry': 'Write the expiry date as MM/YY, for example 11/26.',
+        'cvv': 'The security code has 3 or 4 digits.',
+      });
+      await _tapPayByCard(tester);
+      await _tapPay(tester);
+
+      expect(find.text('The card number must have 12 to 19 digits.'), findsOneWidget);
+      expect(find.text('Enter the name on the card.'), findsOneWidget);
+      expect(find.text('Write the expiry date as MM/YY, for example 11/26.'), findsOneWidget);
+      expect(find.text('The security code has 3 or 4 digits.'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a problem that is not about a field (the five minutes ran out) shows in the banner', (tester) async {
+      final repo = await _open(tester, _holding());
+      repo.cardResult = const ApiError('Your 5 minutes ran out and the room may be taken. Please book again.',
+          statusCode: 409, code: 'hold_expired');
+      await _tapPayByCard(tester);
+      await _fillCard(tester);
+      await _tapPay(tester);
+
+      expect(find.text('Your 5 minutes ran out and the room may be taken. Please book again.'), findsOneWidget);
       expect(find.byKey(const Key('paid-card')), findsNothing);
 
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('coming back to the app from the browser checks the payment by itself', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-      rig.repo.verifyQueue.add(_paid());
+    testWidgets('"choose another way" goes back to the choices, and the hotel works from there', (tester) async {
+      final repo = await _open(tester, _holding());
+      await _tapPayByCard(tester);
 
-      await _leaveAndReturn(tester);
-
-      expect(rig.repo.verifyCalls, 1);
-      expect(find.byKey(const Key('paid-card')), findsOneWidget);
-    });
-
-    testWidgets('coming back does nothing while the guest is still choosing', (tester) async {
-      final rig = await _open(tester, _holding());
-
-      await _leaveAndReturn(tester);
-
-      expect(rig.repo.verifyCalls, 0);
-
-      await tester.pumpWidget(const SizedBox());
-    });
-
-    testWidgets('the payment page can be opened again', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-
-      await tester.tap(find.byKey(const Key('open-page-again')));
-      await tester.pumpAndSettle();
-
-      expect(rig.opened, hasLength(2));
-      expect(rig.opened.first, rig.opened.last);
-
-      await tester.pumpWidget(const SizedBox());
-    });
-
-    testWidgets('if the phone cannot open a browser, the guest is told', (tester) async {
-      final rig = _Rig()..browserWorks = false;
-      await _open(tester, _holding(), rig: rig);
-
-      await _tapPayOnline(tester);
-
-      expect(find.text('Could not open the browser on this phone.'), findsOneWidget);
-      expect(find.byKey(const Key('awaiting-card')), findsOneWidget); // they can try again
-
-      await tester.pumpWidget(const SizedBox());
-    });
-
-    testWidgets('"choose another way" goes back to the choices and pay at the hotel works', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-
+      await tester.ensureVisible(find.byKey(const Key('another-way')));
       await tester.tap(find.byKey(const Key('another-way')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('awaiting-card')), findsNothing);
-      expect(find.byKey(const Key('pay-at-hotel')), findsOneWidget);
+      expect(find.byKey(const Key('pay-card')), findsOneWidget);
+      expect(find.byKey(const Key('card-form')), findsNothing);
 
       await tester.tap(find.byKey(const Key('pay-at-hotel')));
       await tester.pumpAndSettle();
-
-      expect(rig.repo.hotelCalls, 1);
+      expect(repo.hotelCalls, 1);
       expect(find.byKey(const Key('kept-card')), findsOneWidget);
     });
 
-    testWidgets('a payment page that expired sends the guest back to the choices', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-      rig.repo.verifyQueue.add(const ApiError('The payment page expired. Please start again.', statusCode: 409, code: 'session_expired'));
+    testWidgets('the CVV is hidden while typing', (tester) async {
+      await _open(tester, _holding());
+      await _tapPayByCard(tester);
 
-      await tester.tap(find.byKey(const Key('check-payment')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('The payment page expired. Please start again.'), findsOneWidget);
-      expect(find.byKey(const Key('pay-online')), findsOneWidget);
+      expect(tester.widget<TextField>(find.byKey(const Key('card-cvv'))).obscureText, isTrue);
+      expect(tester.widget<TextField>(find.byKey(const Key('card-number'))).obscureText, isFalse);
 
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('a server problem while checking shows its message', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-      rig.repo.verifyQueue.add(const ApiError('We could not check the payment yet. Please try again.', statusCode: 502, code: 'provider_error'));
+    testWidgets('typing groups the number in fours and writes the date with a slash by itself', (tester) async {
+      await _open(tester, _holding());
+      await _tapPayByCard(tester);
+      await _fillCard(tester, number: '5500000000000004', expiry: '1126', cvv: '12a34567');
 
-      await tester.tap(find.byKey(const Key('check-payment')));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('could not check the payment'), findsOneWidget);
-      expect(find.byKey(const Key('awaiting-card')), findsOneWidget);
+      expect(_fieldText(tester, 'card-number'), '5500 0000 0000 0004');
+      expect(_fieldText(tester, 'card-expiry'), '11/26');
+      expect(_fieldText(tester, 'card-cvv'), '1234'); // digits only, at most 4
 
       await tester.pumpWidget(const SizedBox());
     });
   });
 
-  group('when starting is refused', () {
-    testWidgets('online payment not set up: the message shows and the guest can choose the hotel', (tester) async {
-      final rig = _Rig();
-      rig.repo.onlineError = const ApiError(
-        'Online payment is not set up yet. Please choose to pay at the hotel.',
-        statusCode: 503,
-        code: 'online_payment_unavailable',
-      );
-      await _open(tester, _holding(), rig: rig);
+  group('paying with a QR code', () {
+    testWidgets('asks the server, then shows a QR code of the server text with the price and reference', (tester) async {
+      final repo = await _open(tester, _holding());
+      await _tapPayByQr(tester);
 
-      await _tapPayOnline(tester);
-
-      expect(find.textContaining('not set up yet'), findsOneWidget);
-      expect(find.byKey(const Key('awaiting-card')), findsNothing);
-      expect(find.byKey(const Key('pay-at-hotel')), findsOneWidget);
-      expect(rig.opened, isEmpty);
+      expect(repo.qrCalls, 1);
+      expect(find.byKey(const Key('qr-card')), findsOneWidget);
+      expect(find.byType(QrImageView), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const Key('qr-amount'))).data, '\$25.50');
+      expect(find.text('Angkor Stay · AS7-K3F9QZ7M'), findsOneWidget);
+      expect(find.textContaining('KHQR'), findsWidgets);
+      expect(find.byKey(const Key('discount-line')), findsOneWidget); // the booking now has the discount
 
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('the five minutes ran out: the message shows', (tester) async {
-      final rig = _Rig();
-      rig.repo.onlineError = const ApiError(
-        'Your 5 minutes ran out and the room may be taken. Please book again.',
-        statusCode: 409,
-        code: 'hold_expired',
-      );
-      await _open(tester, _holding(), rig: rig);
+    testWidgets('the QR text can be copied, so it can be tried in any QR reader', (tester) async {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
 
-      await _tapPayOnline(tester);
+      await _open(tester, _holding());
+      await _tapPayByQr(tester);
 
-      expect(find.textContaining('5 minutes ran out'), findsOneWidget);
-      expect(rig.opened, isEmpty);
+      await tester.ensureVisible(find.byKey(const Key('copy-qr')));
+      await tester.tap(find.byKey(const Key('copy-qr')));
+      await tester.pumpAndSettle();
+
+      expect(copied, [_payload]);
+      expect(find.text('The text of the QR code was copied.'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
     });
-  });
 
-  group('demo mode', () {
-    _Rig demoRig() {
-      final rig = _Rig();
-      rig.repo.onlineResult = PayOnlineResult(booking: _onlineStarted(), mode: 'demo', checkoutUrl: null);
-      return rig;
-    }
+    testWidgets('the payment gets more time: the countdown restarts from what the server says', (tester) async {
+      await _open(tester, _booking(hold: 60));
+      expect(find.text('1:00'), findsOneWidget);
 
-    testWidgets('shows a demo button instead of opening a browser', (tester) async {
-      final rig = await _open(tester, _holding(), rig: demoRig());
+      await _tapPayByQr(tester);
 
-      await _tapPayOnline(tester);
-
-      expect(find.byKey(const Key('demo-card')), findsOneWidget);
-      expect(find.text('Demo payment'), findsOneWidget);
-      expect(find.text('Pay \$25.50 (demo)'), findsOneWidget);
-      expect(rig.opened, isEmpty);
       expect(find.text('15:00'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('pressing the demo button confirms and shows the paid booking', (tester) async {
-      final rig = await _open(tester, _holding(), rig: demoRig());
-      await _tapPayOnline(tester);
+    testWidgets('"I have paid" asks the server, then shows the paid booking with KHQR', (tester) async {
+      final repo = await _open(tester, _holding());
+      await _tapPayByQr(tester);
 
-      await tester.tap(find.byKey(const Key('demo-pay')));
+      await tester.tap(find.byKey(const Key('check-payment')));
       await tester.pumpAndSettle();
 
-      expect(rig.repo.demoCalls, 1);
+      expect(repo.verifyCalls, 1);
       expect(find.byKey(const Key('paid-card')), findsOneWidget);
-      expect(find.text('Paid \$25.50 online. You saved \$4.50 (15% off).'), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const Key('paid-text'))).data, contains('online with KHQR'));
+      expect(find.byKey(const Key('qr-card')), findsNothing);
     });
 
-    testWidgets('if the admin switched demo mode off meanwhile, the message shows', (tester) async {
-      final rig = demoRig();
-      rig.repo.demoError = const ApiError('Demo payment is switched off.', statusCode: 403, code: 'demo_mode_off');
-      await _open(tester, _holding(), rig: rig);
-      await _tapPayOnline(tester);
+    testWidgets('a QR that expired sends the guest back to the choices with the message', (tester) async {
+      final repo = await _open(tester, _holding());
+      repo.verifyQueue.add(const ApiError('The QR code expired. Please start again.', statusCode: 409, code: 'payment_expired'));
+      await _tapPayByQr(tester);
 
-      await tester.tap(find.byKey(const Key('demo-pay')));
+      await tester.tap(find.byKey(const Key('check-payment')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Demo payment is switched off.'), findsOneWidget);
-      expect(find.byKey(const Key('paid-card')), findsNothing);
+      expect(find.text('The QR code expired. Please start again.'), findsOneWidget);
+      expect(find.byKey(const Key('pay-qr')), findsOneWidget);
+      expect(find.byKey(const Key('qr-card')), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('any other server problem while checking shows its message and keeps the QR', (tester) async {
+      final repo = await _open(tester, _holding());
+      repo.verifyQueue.add(const ApiError('The amount does not match this booking. Please start again.', statusCode: 422, code: 'payment_mismatch'));
+      await _tapPayByQr(tester);
+
+      await tester.tap(find.byKey(const Key('check-payment')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('The amount does not match this booking. Please start again.'), findsOneWidget);
+      expect(find.byKey(const Key('qr-card')), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('if the server refuses to start, the message shows and the guest can still choose', (tester) async {
+      final repo = await _open(tester, _holding());
+      repo.qrError = const ApiError('Your 5 minutes ran out and the room may be taken. Please book again.',
+          statusCode: 409, code: 'hold_expired');
+
+      await _tapPayByQr(tester);
+
+      expect(find.text('Your 5 minutes ran out and the room may be taken. Please book again.'), findsOneWidget);
+      expect(find.byKey(const Key('qr-card')), findsNothing);
+      expect(find.byKey(const Key('pay-at-hotel')), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('"choose another way" goes back to the choices', (tester) async {
+      await _open(tester, _holding());
+      await _tapPayByQr(tester);
+
+      await tester.ensureVisible(find.byKey(const Key('another-way')));
+      await tester.tap(find.byKey(const Key('another-way')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('pay-card')), findsOneWidget);
+      expect(find.byKey(const Key('qr-card')), findsNothing);
 
       await tester.pumpWidget(const SizedBox());
     });
   });
 
-  group('paying too late and money coming back', () {
-    testWidgets('when the time runs out while waiting, the guest can still check their payment', (tester) async {
-      final rig = _Rig();
-      rig.repo.onlineResult = PayOnlineResult(
-        booking: _onlineStarted(hold: 3),
-        mode: 'stripe',
-        checkoutUrl: 'https://checkout.stripe.test/pay/cs_test_1',
-      );
-      await _open(tester, _holding(), rig: rig);
-      await _tapPayOnline(tester);
-
-      await tester.pump(const Duration(seconds: 5));
-
-      expect(find.text('Hold ran out'), findsOneWidget);
-      expect(find.byKey(const Key('check-payment')), findsOneWidget);
-      expect(find.textContaining('If you already paid'), findsOneWidget);
-
-      rig.repo.verifyQueue.add(_paid()); // the guest did pay, and the room was still free
-      await tester.tap(find.byKey(const Key('check-payment')));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('paid-card')), findsOneWidget);
-    });
-
-    testWidgets('a hold that ran out before any payment offers no payment check', (tester) async {
-      await _open(tester, _booking(hold: 2));
-
-      await tester.pump(const Duration(seconds: 4));
-
-      expect(find.text('Hold ran out'), findsOneWidget);
-      expect(find.byKey(const Key('check-payment')), findsNothing);
-      expect(find.text('Back to rooms'), findsOneWidget);
-    });
-
-    testWidgets('if the room was taken, the money went back and the guest is told clearly', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-      rig.repo.verifyQueue.add(const ApiError(
-        'The room was taken before your payment arrived. Your money was sent back.',
-        statusCode: 409,
-        code: 'room_gone_refunded',
-      ));
-
-      await tester.tap(find.byKey(const Key('check-payment')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('The room was taken before your payment arrived. Your money was sent back.'), findsOneWidget);
-      expect(find.text('Payment sent back'), findsOneWidget);
-      expect(find.text('Back to rooms'), findsOneWidget);
-      expect(find.byKey(const Key('check-payment')), findsNothing);
-      expect(find.byKey(const Key('pay-online')), findsNothing);
-      expect(find.byKey(const Key('paid-card')), findsNothing);
-
-      await tester.pump(const Duration(minutes: 20));
-      expect(find.text('Hold ran out'), findsNothing);
-    });
-
-    testWidgets('a payment for a booking cancelled meanwhile is also shown as sent back', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
-      rig.repo.verifyQueue.add(const ApiError(
-        'This booking was cancelled before the payment arrived. Your money was sent back.',
-        statusCode: 409,
-        code: 'booking_cancelled_refunded',
-      ));
-
-      await tester.tap(find.byKey(const Key('check-payment')));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('Your money was sent back'), findsOneWidget);
-      expect(find.text('Payment sent back'), findsOneWidget);
-    });
-  });
-
-  group('screens that open already paid or kept', () {
+  group('screens that open already paid, kept or run out', () {
     testWidgets('a paid booking opens straight on the paid page', (tester) async {
-      await _open(tester, _paid());
+      await _open(tester, _paidByCard());
 
       expect(find.byKey(const Key('paid-card')), findsOneWidget);
       expect(find.byKey(const Key('countdown')), findsNothing);
       expect(find.text('Release this room'), findsNothing);
     });
 
-    testWidgets('releasing a room while paying online tells the server', (tester) async {
-      final rig = await _open(tester, _holding());
-      await _tapPayOnline(tester);
+    testWidgets('a hold that already ran out offers no way to pay', (tester) async {
+      await _open(tester, _booking(hold: 0));
+
+      expect(find.text('Hold ran out'), findsOneWidget);
+      expect(find.byKey(const Key('pay-card')), findsNothing);
+      expect(find.byKey(const Key('pay-qr')), findsNothing);
+      expect(find.text('Back to rooms'), findsOneWidget);
+    });
+
+    testWidgets('releasing a room while paying tells the server', (tester) async {
+      final repo = await _open(tester, _holding());
+      await _tapPayByQr(tester);
 
       await tester.tap(find.text('Release this room'));
       await tester.pumpAndSettle();
 
-      expect(rig.repo.released, [7]);
+      expect(repo.released, [7]);
       expect(find.byType(BookingHoldScreen), findsNothing);
       expect(find.text('The room was released.'), findsOneWidget);
+    });
+  });
+
+  group('card input helpers', () {
+    TextEditingValue run(TextInputFormatter f, String old, String now) =>
+        f.formatEditUpdate(TextEditingValue(text: old), TextEditingValue(text: now));
+
+    test('the card number is grouped in fours and limited to 19 digits', () {
+      final f = CardNumberFormatter();
+      expect(run(f, '', '4242424242424242').text, '4242 4242 4242 4242');
+      expect(run(f, '', '4242 4242 42').text, '4242 4242 42');
+      expect(run(f, '', 'ab12cd').text, '12');
+      expect(run(f, '', '12345678901234567890123').text, '1234 5678 9012 3456 789');
+    });
+
+    test('the expiry date gets its slash by itself and keeps 4 digits', () {
+      final f = ExpiryFormatter();
+      expect(run(f, '', '1').text, '1');
+      expect(run(f, '1', '11').text, '11/');
+      expect(run(f, '11/', '11/2').text, '11/2');
+      expect(run(f, '', '1126').text, '11/26');
+      expect(run(f, '', '112699').text, '11/26');
+    });
+
+    test('the guest can delete back over the slash', () {
+      final f = ExpiryFormatter();
+      expect(run(f, '11/', '11').text, '11'); // deleted the slash: it does not come back at once
     });
   });
 
@@ -584,7 +553,7 @@ void main() {
       expect(onlinePrice(15.5, 15), (discount: 2.33, due: 13.17)); // the same cents as the server
     });
 
-    test('Booking reads the discount and the payment', () {
+    test('Booking reads the discount and how it was paid', () {
       final b = Booking.fromJson({
         'id': 7,
         'code': 'AS-0007',
@@ -603,6 +572,7 @@ void main() {
         'payment_choice': 'online',
         'paid': true,
         'payment_method': 'online',
+        'payment_detail': 'Visa ending 4242',
         'hold_seconds_left': null,
       });
 
@@ -611,6 +581,7 @@ void main() {
       expect(b.toPay, 25.5);
       expect(b.hasDiscount, isTrue);
       expect(b.paymentMethod, 'online');
+      expect(b.paymentDetail, 'Visa ending 4242');
       expect(b.isPaidAndConfirmed, isTrue);
       expect(b.isKeptForHotel, isFalse);
     });
@@ -633,6 +604,7 @@ void main() {
       expect(b.discountPercent, 0);
       expect(b.hasDiscount, isFalse);
       expect(b.toPay, 30);
+      expect(b.paymentDetail, isNull);
       expect(b.isPaidAndConfirmed, isFalse);
     });
 
@@ -641,11 +613,6 @@ void main() {
       expect(_booking(status: 'pending', paid: true).isPaidAndConfirmed, isFalse);
       expect(_booking(status: 'confirmed', paid: false).isPaidAndConfirmed, isFalse);
       expect(_booking(status: 'checked_in', paid: true).isPaidAndConfirmed, isTrue);
-    });
-
-    test('PayOnlineResult knows demo mode', () {
-      expect(PayOnlineResult(booking: _holding(), mode: 'demo', checkoutUrl: null).isDemo, isTrue);
-      expect(PayOnlineResult(booking: _holding(), mode: 'stripe', checkoutUrl: 'https://x').isDemo, isFalse);
     });
 
     test('PublicSettings reads the API json', () {

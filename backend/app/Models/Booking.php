@@ -40,7 +40,7 @@ class Booking extends Model
         'user_id', 'room_id', 'check_in_date', 'check_out_date', 'guests',
         'nights', 'price_per_night', 'total_price', 'status', 'payment_choice',
         'hold_expires_at', 'checked_in_at', 'checked_in_by', 'checked_out_at', 'checked_out_by',
-        'discount_percent', 'discount_amount', 'checkout_session_id',
+        'discount_percent', 'discount_amount',
     ];
 
     protected function casts(): array
@@ -73,6 +73,12 @@ class Booking extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    /** Every card or QR payment the guest started for this booking. */
+    public function intents(): HasMany
+    {
+        return $this->hasMany(PaymentIntent::class);
     }
 
     public function checkedInBy(): BelongsTo

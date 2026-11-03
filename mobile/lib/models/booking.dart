@@ -28,6 +28,9 @@ class Booking {
   final bool paid;
   final String? paymentMethod;
 
+  /// What the guest paid with, for example "Visa ending 4242" or "KHQR". Only for online payments.
+  final String? paymentDetail;
+
   /// Money already given back (online payments cancelled by the guest).
   final double refundedAmount;
 
@@ -58,6 +61,7 @@ class Booking {
     this.paymentChoice,
     this.paid = false,
     this.paymentMethod,
+    this.paymentDetail,
     this.refundedAmount = 0,
     this.canCancel = false,
   });
@@ -83,6 +87,7 @@ class Booking {
       paymentChoice: json['payment_choice'] as String?,
       paid: (json['paid'] ?? false) as bool,
       paymentMethod: json['payment_method'] as String?,
+      paymentDetail: json['payment_detail'] as String?,
       refundedAmount: (json['refunded_amount'] as num?)?.toDouble() ?? 0,
       canCancel: (json['can_cancel'] ?? false) as bool,
       holdSecondsLeft: json['hold_seconds_left'] as int?,

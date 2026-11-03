@@ -2,33 +2,35 @@ import 'dart:async';
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../booking/booking_repository.dart';
 import '../core/api_error.dart';
 import '../core/format.dart';
 import '../core/public_settings_provider.dart';
-import '../core/url_opener.dart';
 import '../models/booking.dart';
 import '../rooms/room_types_provider.dart';
+import '../widgets/card_formatters.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/room_photo.dart';
 
-/// Where the guest is while paying online.
+/// Where the guest is while paying.
 enum _Step {
-  /// Choosing: online or at the hotel.
+  /// Choosing: card, QR code or at the hotel.
   choose,
 
-  /// Stripe's payment page is open in the browser. We wait for the guest to come back.
-  awaitingBrowser,
+  /// Typing a card.
+  card,
 
-  /// Demo mode: a fake pay button.
-  demoReady,
+  /// Showing a QR code and waiting for "I have paid".
+  qr,
 }
 
 /// Shown right after booking. The room is held while the guest chooses how to pay.
 /// - Pay at the hotel: the room is kept with no countdown.
-/// - Pay online: more time, a payment page, and the SERVER checks the payment.
+/// - Pay by card or QR: the payment is simulated, but the SERVER saves it in the database and checks it there.
 class BookingHoldScreen extends ConsumerStatefulWidget {
   final Booking booking;
   const BookingHoldScreen({super.key, required this.booking});
@@ -37,16 +39,19 @@ class BookingHoldScreen extends ConsumerStatefulWidget {
   ConsumerState<BookingHoldScreen> createState() => _BookingHoldScreenState();
 }
 
-class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with WidgetsBindingObserver {
+class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
   static const _firstHoldSeconds = 300; // the server holds a room for 5 minutes
 
   late Booking _booking = widget.booking;
   _Step _step = _Step.choose;
-  String? _checkoutUrl;
-  String? _hint; // for example the sandbox test card, sent by the server
+  QrPayment? _qr;
 
-  /// The guest paid too late, the room was gone, and the money went back.
-  bool _dead = false;
+  // The card form.
+  final _number = TextEditingController();
+  final _holder = TextEditingController();
+  final _expiry = TextEditingController();
+  final _cvv = TextEditingController();
+  Map<String, String> _fieldErrors = {};
 
   // The server tells us how many seconds are left, and we count down from
   // there. We never compare with the phone's clock, which may be wrong.
@@ -66,28 +71,21 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
 
   bool get _paid => _booking.isPaidAndConfirmed;
   bool get _kept => _booking.isKeptForHotel;
-  bool get _expired => !_kept && !_paid && !_dead && _remaining == 0;
+  bool get _expired => !_kept && !_paid && _remaining == 0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _startTimer();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
-    super.dispose();
-  }
-
-  /// The guest comes back from the browser: check the payment without asking them to tap.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _step == _Step.awaitingBrowser && !_busy && !_paid && !_dead) {
-      _verify();
+    for (final c in [_number, _holder, _expiry, _cvv]) {
+      c.dispose();
     }
+    super.dispose();
   }
 
   void _startTimer() {
@@ -95,7 +93,7 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return t.cancel();
       setState(() {});
-      if (_expired || _paid || _kept || _dead) {
+      if (_expired || _paid || _kept) {
         t.cancel();
         // The room may be free again, so the list must show the new numbers.
         if (_expired) ref.invalidate(roomTypesProvider);
@@ -123,6 +121,7 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
       _busy = true;
       _error = null;
       _info = null;
+      _fieldErrors = {};
     });
     try {
       await action();
@@ -154,45 +153,58 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
         setState(() {
           _booking = kept;
           _step = _Step.choose;
-          _checkoutUrl = null;
+          _qr = null;
         });
       });
 
-  Future<void> _payOnline() => _run(() async {
-        final result = await ref.read(bookingRepositoryProvider).payOnline(_booking.id);
-        if (!mounted) return;
-
-        setState(() => _booking = result.booking);
-        final seconds = result.booking.holdSecondsLeft;
-        if (seconds != null) _resetCountdown(seconds);
-
-        if (result.isDemo) {
-          setState(() => _step = _Step.demoReady);
-          return;
-        }
-
-        _checkoutUrl = result.checkoutUrl;
-        _hint = result.hint;
-        setState(() => _step = _Step.awaitingBrowser);
-        await _openPage();
-      });
-
-  Future<void> _openPage() async {
-    final url = _checkoutUrl;
-    if (url == null) return;
-
-    bool opened;
+  /// The guest sends the card. The server checks the fields, saves the payment in the database,
+  /// checks it there, and confirms the booking.
+  Future<void> _payByCard() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _info = null;
+      _fieldErrors = {};
+    });
     try {
-      opened = await ref.read(urlOpenerProvider)(Uri.parse(url));
-    } catch (_) {
-      opened = false;
-    }
-    if (!opened && mounted) {
-      setState(() => _error = 'Could not open the browser on this phone.');
+      final confirmed = await ref.read(bookingRepositoryProvider).payByCard(
+            _booking.id,
+            number: _number.text,
+            holder: _holder.text.trim(),
+            expiry: _expiry.text.trim(),
+            cvv: _cvv.text.trim(),
+          );
+      if (!mounted) return;
+      _timer?.cancel();
+      ref.invalidate(roomTypesProvider);
+      setState(() => _booking = confirmed);
+    } on ApiError catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fieldErrors = e.fieldErrors;
+        // A field problem is shown under the field. Anything else goes in the banner.
+        _error = e.fieldErrors.isEmpty ? e.message : null;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  /// "I paid." The server asks Stripe. Only then is the booking confirmed.
+  /// The guest wants to pay with a QR code: the server opens the payment and gives us the QR text.
+  Future<void> _startQr() => _run(() async {
+        final qr = await ref.read(bookingRepositoryProvider).startQr(_booking.id);
+        if (!mounted) return;
+
+        setState(() {
+          _booking = qr.booking;
+          _qr = qr;
+          _step = _Step.qr;
+        });
+        final seconds = qr.booking.holdSecondsLeft ?? qr.secondsLeft;
+        _resetCountdown(seconds);
+      });
+
+  /// "I have paid." The server finds the QR payment in the database and checks it.
   Future<void> _verify() async {
     setState(() {
       _busy = true;
@@ -208,20 +220,11 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
     } on ApiError catch (e) {
       if (!mounted) return;
       switch (e.code) {
-        case 'payment_not_completed':
-          setState(() => _info = 'Not paid yet. Finish the payment in the browser, then tap the button again.');
-        case 'session_expired':
+        case 'payment_expired' || 'payment_not_open' || 'no_payment_started':
           setState(() {
             _error = e.message;
             _step = _Step.choose;
-          });
-        case 'room_gone_refunded' || 'booking_cancelled_refunded':
-          // The money went back and the booking is cancelled. Nothing more to do here.
-          _timer?.cancel();
-          ref.invalidate(roomTypesProvider);
-          setState(() {
-            _error = e.message;
-            _dead = true;
+            _qr = null;
           });
         default:
           setState(() => _error = e.message);
@@ -231,18 +234,11 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
     }
   }
 
-  Future<void> _demoPay() => _run(() async {
-        final confirmed = await ref.read(bookingRepositoryProvider).demoPay(_booking.id);
-        if (!mounted) return;
-        _timer?.cancel();
-        ref.invalidate(roomTypesProvider);
-        setState(() => _booking = confirmed);
-      });
-
   void _chooseAnotherWay() => setState(() {
         _step = _Step.choose;
         _error = null;
         _info = null;
+        _fieldErrors = {};
       });
 
   // ------------------------------------------------------------------- build
@@ -256,9 +252,7 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
         ? 'Booked and paid'
         : _kept
             ? 'Room kept for you'
-            : _dead
-                ? 'Payment sent back'
-                : 'Your room is held';
+            : 'Your room is held';
 
     return PopScope(
       canPop: false,
@@ -282,11 +276,11 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
               _paidCard(theme, b)
             else if (_kept)
               _keptCard(theme, b)
-            else if (!_dead)
+            else
               _countdownCard(theme, b),
             const SizedBox(height: 16),
-            if (!_dead) _summaryCard(theme, b),
-            if (!_dead) const SizedBox(height: 16),
+            _summaryCard(theme, b),
+            const SizedBox(height: 16),
             ..._actions(theme),
           ],
         ),
@@ -297,7 +291,7 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
   List<Widget> _actions(ThemeData theme) {
     final backButton = FilledButton(onPressed: _backToRooms, child: const Text('Back to rooms'));
 
-    if (_paid || _dead) return [backButton];
+    if (_paid) return [backButton];
 
     if (_kept) {
       return [
@@ -311,31 +305,13 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
       ];
     }
 
-    if (_expired) {
-      return [
-        // The guest may have paid just before the time ran out. The server decides what happens.
-        if (_step == _Step.awaitingBrowser) ...[
-          const Text(
-            'If you already paid, tap the button. If the room is gone, your money is sent back.',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            key: const Key('check-payment'),
-            onPressed: _busy ? null : _verify,
-            child: const Text('Check my payment'),
-          ),
-          const SizedBox(height: 8),
-        ],
-        backButton,
-      ];
-    }
+    if (_expired) return [backButton];
 
     return [
       ...switch (_step) {
         _Step.choose => _choices(theme),
-        _Step.awaitingBrowser => [_awaitingCard(theme), const SizedBox(height: 16)],
-        _Step.demoReady => [_demoCard(theme), const SizedBox(height: 16)],
+        _Step.card => [_cardForm(theme), const SizedBox(height: 16)],
+        _Step.qr => [_qrCard(theme), const SizedBox(height: 16)],
       },
       OutlinedButton(
         onPressed: _busy ? null : _release,
@@ -380,6 +356,8 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
   }
 
   Widget _paidCard(ThemeData theme, Booking b) {
+    final how = b.paymentDetail == null ? 'online' : 'online with ${b.paymentDetail}';
+
     return Card(
       key: const Key('paid-card'),
       color: Colors.green.shade50,
@@ -399,7 +377,7 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
             ),
             const SizedBox(height: 12),
             Text(
-              'Paid ${formatMoney(b.toPay)} online.'
+              'Paid ${formatMoney(b.toPay)} $how.'
               '${b.hasDiscount ? ' You saved ${formatMoney(b.discountAmount)} (${b.discountPercent}% off).' : ''}',
               key: const Key('paid-text'),
               textAlign: TextAlign.center,
@@ -451,40 +429,90 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
     );
   }
 
-  Widget _awaitingCard(ThemeData theme) {
+  /// The price after the online discount, from the public setting. The server sets the real one.
+  double get _onlineDue {
+    final percent = ref.watch(publicSettingsProvider).value?.onlineDiscountPercent ?? 0;
+    return onlinePrice(_booking.totalPrice, percent).due;
+  }
+
+  Widget _cardForm(ThemeData theme) {
+    final payButton = FilledButton(
+      key: const Key('card-pay'),
+      onPressed: _busy ? null : _payByCard,
+      child: _busy
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
+          : Text('Pay ${formatMoney(_onlineDue)}'),
+    );
+
     return Card(
-      key: const Key('awaiting-card'),
+      key: const Key('card-form'),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Finish paying in your browser', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              'We opened a secure payment page. Pay ${formatMoney(_booking.toPay)}, then come back to this app.',
+            Text('Pay by card', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            const Text(
+              'This is a practice payment. Any card number works. No money moves.',
+              style: TextStyle(fontSize: 13),
             ),
-            if (_hint != null) ...[
-              const SizedBox(height: 8),
-              Text(_hint!, key: const Key('payment-hint'), style: const TextStyle(fontSize: 13)),
-            ],
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('card-number'),
+              controller: _number,
+              keyboardType: TextInputType.number,
+              inputFormatters: [CardNumberFormatter()],
+              decoration: InputDecoration(
+                labelText: 'Card number',
+                prefixIcon: const Icon(Icons.credit_card),
+                errorText: _fieldErrors['number'],
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('card-holder'),
+              controller: _holder,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(labelText: 'Name on the card', errorText: _fieldErrors['holder']),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const Key('card-expiry'),
+                    controller: _expiry,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [ExpiryFormatter()],
+                    decoration: InputDecoration(
+                      labelText: 'Expires (MM/YY)',
+                      hintText: '11/26',
+                      errorText: _fieldErrors['expiry'],
+                      errorMaxLines: 2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    key: const Key('card-cvv'),
+                    controller: _cvv,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+                    decoration: InputDecoration(labelText: 'CVV', errorText: _fieldErrors['cvv']),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
-            FilledButton(
-              key: const Key('check-payment'),
-              onPressed: _busy ? null : _verify,
-              child: _busy
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('I have paid, check now'),
-            ),
-            TextButton(
-              key: const Key('open-page-again'),
-              onPressed: _busy ? null : _openPage,
-              child: const Text('Open the payment page again'),
-            ),
+            payButton,
             TextButton(
               key: const Key('another-way'),
               onPressed: _busy ? null : _chooseAnotherWay,
@@ -496,28 +524,71 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
     );
   }
 
-  Widget _demoCard(ThemeData theme) {
+  Widget _qrCard(ThemeData theme) {
+    final qr = _qr;
+    if (qr == null) return const SizedBox.shrink();
+
     return Card(
-      key: const Key('demo-card'),
+      key: const Key('qr-card'),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Demo payment', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            const Text('Demo mode is on, so no real money moves. This is for the presentation.'),
+            Text('Scan to pay', style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            Text(
+              'Open your banking app and scan this KHQR code.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(12),
+                child: QrImageView(key: const Key('qr-image'), data: qr.payload, size: 220),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              formatMoney(qr.amount),
+              key: const Key('qr-amount'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${qr.merchant} · ${qr.reference}',
+              key: const Key('qr-reference'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall,
+            ),
+            TextButton.icon(
+              key: const Key('copy-qr'),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: qr.payload));
+                if (mounted) setState(() => _info = 'The text of the QR code was copied.');
+              },
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('Copy the code text'),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Practice payment: no money moves. Tap the button when you are done.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13),
+            ),
             const SizedBox(height: 16),
             FilledButton(
-              key: const Key('demo-pay'),
-              onPressed: _busy ? null : _demoPay,
+              key: const Key('check-payment'),
+              onPressed: _busy ? null : _verify,
               child: _busy
                   ? const SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : Text('Pay ${formatMoney(_booking.toPay)} (demo)'),
+                  : const Text('I have paid'),
             ),
             TextButton(
               key: const Key('another-way'),
@@ -577,30 +648,45 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> with Widg
   List<Widget> _choices(ThemeData theme) {
     final percent = ref.watch(publicSettingsProvider).value?.onlineDiscountPercent ?? 0;
     final price = onlinePrice(_booking.totalPrice, percent);
+    final offer = percent > 0
+        ? '${formatMoney(price.due)} instead of ${formatMoney(_booking.totalPrice)}'
+        : 'Your room is kept while you pay.';
 
     return [
       Text('How do you want to pay?', style: theme.textTheme.titleMedium),
       const SizedBox(height: 8),
       Card(
         child: ListTile(
-          key: const Key('pay-online'),
+          key: const Key('pay-card'),
           enabled: !_busy,
           leading: const Icon(Icons.credit_card),
-          title: Text(percent > 0 ? 'Pay online and save $percent%' : 'Pay online'),
-          subtitle: Text(percent > 0
-              ? '${formatMoney(price.due)} instead of ${formatMoney(_booking.totalPrice)}'
-              : 'Pay now with a card. Your room is kept while you pay.'),
+          title: Text(percent > 0 ? 'Pay by card and save $percent%' : 'Pay by card'),
+          subtitle: Text(offer),
           trailing: const Icon(Icons.chevron_right),
-          onTap: _busy ? null : _payOnline,
+          onTap: _busy ? null : () => setState(() {
+                _step = _Step.card;
+                _error = null;
+              }),
+        ),
+      ),
+      Card(
+        child: ListTile(
+          key: const Key('pay-qr'),
+          enabled: !_busy,
+          leading: _busy
+              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.qr_code_2),
+          title: Text(percent > 0 ? 'Pay with a QR code and save $percent%' : 'Pay with a QR code'),
+          subtitle: const Text('Scan with your banking app (KHQR).'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _busy ? null : _startQr,
         ),
       ),
       Card(
         child: ListTile(
           key: const Key('pay-at-hotel'),
           enabled: !_busy,
-          leading: _busy
-              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.storefront_outlined),
+          leading: const Icon(Icons.storefront_outlined),
           title: const Text('Pay at the hotel'),
           subtitle: const Text('Pay when you arrive. We keep your room. No discount.'),
           trailing: const Icon(Icons.chevron_right),

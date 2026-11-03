@@ -4,14 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Booking;
 use App\Models\Payment;
-use App\Payments\PaymentGateway;
 use Database\Seeders\RoomSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\MakesBookings;
 use Tests\Concerns\MakesUsers;
-use Tests\Support\FakeGateway;
 use Tests\TestCase;
 
 /** Ticket 09: my bookings, cancel with refund, profile. */
@@ -21,14 +19,10 @@ class MyBookingsTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
-    private FakeGateway $gateway;
-
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RoomSeeder::class);
-        $this->gateway = new FakeGateway();
-        $this->app->instance(PaymentGateway::class, $this->gateway);
     }
 
     private function pay(Booking $b, string $method, string $ref = 'ref-1'): Payment
@@ -90,37 +84,7 @@ class MyBookingsTest extends TestCase
             ->assertJsonPath('data.status', 'cancelled')
             ->assertJsonPath('data.refunded_amount', 30);
 
-        $this->assertSame(['AS1-REAL'], $this->gateway->refunds);
         $this->assertSame(Payment::STATUS_REFUNDED, $p->fresh()->status);
-    }
-
-    public function test_demo_payment_is_marked_refunded_without_calling_the_gateway(): void
-    {
-        $me = $this->makeUser('customer');
-        $b = $this->makeBooking($me);
-        $p = $this->pay($b, Payment::METHOD_ONLINE, 'demo-123');
-
-        Sanctum::actingAs($me);
-        $this->postJson("/api/bookings/{$b->id}/cancel")->assertOk();
-
-        $this->assertSame([], $this->gateway->refunds);
-        $this->assertSame(Payment::STATUS_REFUNDED, $p->fresh()->status);
-    }
-
-    public function test_failed_refund_cancels_nothing(): void
-    {
-        $me = $this->makeUser('customer');
-        $b = $this->makeBooking($me);
-        $p = $this->pay($b, Payment::METHOD_ONLINE, 'AS1-REAL');
-        $this->gateway->failRefund = true;
-
-        Sanctum::actingAs($me);
-        $this->postJson("/api/bookings/{$b->id}/cancel")
-            ->assertStatus(502)
-            ->assertJsonPath('code', 'refund_failed');
-
-        $this->assertSame(Booking::STATUS_CONFIRMED, $b->fresh()->status);
-        $this->assertSame(Payment::STATUS_PAID, $p->fresh()->status);
     }
 
     public function test_paid_at_front_desk_cannot_be_cancelled_by_guest(): void
@@ -167,7 +131,7 @@ class MyBookingsTest extends TestCase
         $this->postJson("/api/bookings/{$b->id}/cancel")->assertOk();
         $this->postJson("/api/bookings/{$b->id}/cancel")->assertStatus(422);
 
-        $this->assertCount(1, $this->gateway->refunds);
+        $this->assertSame(1, Payment::where('status', Payment::STATUS_REFUNDED)->count());
     }
 
     public function test_profile_changes_name_and_phone_but_never_email_or_role(): void

@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Models\PaymentIntent;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,6 +29,12 @@ class BookingResource extends JsonResource
         $paid = $this->payments()->where('status', Payment::STATUS_PAID)->first();
         $refunded = (float) $this->payments()->where('status', Payment::STATUS_REFUNDED)->sum('amount');
 
+        // "Visa ending 4242" or "KHQR" for an online payment, found in the database by its reference.
+        $detail = null;
+        if ($paid?->method === Payment::METHOD_ONLINE) {
+            $detail = PaymentIntent::where('reference', $paid->reference)->first()?->describe();
+        }
+
         return [
             'id' => $this->id,
             'code' => $this->code,
@@ -50,6 +57,7 @@ class BookingResource extends JsonResource
             'payment_choice' => $this->payment_choice,
             'paid' => $paid !== null,
             'payment_method' => $paid?->method,
+            'payment_detail' => $detail,
             'refunded_amount' => round($refunded, 2),
             'can_cancel' => $this->canBeCancelledByGuest(),
             'hold_expires_at' => $this->hold_expires_at?->toIso8601String(),

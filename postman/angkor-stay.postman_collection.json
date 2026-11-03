@@ -575,7 +575,7 @@
       ]
     },
     {
-      "name": "3. Guest: book, keep, cancel, pay online",
+      "name": "3. Guest: book, keep, cancel, pay by card or QR",
       "item": [
         {
           "name": "A: book a Single room (held 5 minutes)",
@@ -1149,11 +1149,132 @@
                 }
               ]
             },
-            "description": "Booking C shows the \"pay online\" path."
+            "description": "Booking C is paid with a QR code."
           }
         },
         {
-          "name": "C: pay online (15% off, opens the payment page)",
+          "name": "C: card with an expired date (validation error)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 422\", function () {",
+                  "  pm.expect([422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"The date field says the card expired\", function () { pm.expect(pm.response.json().errors.expiry[0]).to.eql(\"This card has expired.\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bookings/{{booking_c}}/pay-card",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings",
+                "{{booking_c}}",
+                "pay-card"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"number\": \"4242 4242 4242 4242\",\n  \"holder\": \"Sokha Demo\",\n  \"expiry\": \"10/26\",\n  \"cvv\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "The date is checked: 10/26 is over. A card is good until the end of the month on it, so 11/26 works all through November 2026."
+          }
+        },
+        {
+          "name": "C: card with wrong fields (validation errors)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 422\", function () {",
+                  "  pm.expect([422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Every wrong field is named\", function () { var e = pm.response.json().errors; [\"number\", \"holder\", \"expiry\", \"cvv\"].forEach(function (k) { pm.expect(e).to.have.property(k); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bookings/{{booking_c}}/pay-card",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings",
+                "{{booking_c}}",
+                "pay-card"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"number\": \"12\",\n  \"holder\": \"\",\n  \"expiry\": \"1126\",\n  \"cvv\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "C: pay with a QR code (opens the payment, gives the QR text)",
           "event": [
             {
               "listen": "test",
@@ -1163,9 +1284,8 @@
                   "pm.test(\"Status is 200\", function () {",
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
-                  "pm.test(\"Answer has mode\", function () { pm.expect(pm.response.json()).to.have.property(\"mode\"); });",
-                  "pm.test(\"Discount is saved on the booking\", function () { var d = pm.response.json().data; pm.expect(d.discount_percent).to.be.above(0); pm.expect(d.amount_due).to.be.below(d.total_price); });",
-                  "pm.test(\"Mode is online or demo\", function () { pm.expect([\"online\", \"demo\"]).to.include(pm.response.json().mode); });"
+                  "pm.test(\"QR text in the KHQR layout, with the discounted amount\", function () { var q = pm.response.json().qr; pm.expect(q.payload).to.match(/^00020101021/); pm.expect(q.payload).to.include(\"5405\" + q.amount.toFixed(2)); pm.expect(q.currency).to.eql(\"USD\"); });",
+                  "pm.test(\"Discount is saved on the booking\", function () { var d = pm.response.json().data; pm.expect(d.discount_percent).to.be.above(0); pm.expect(d.amount_due).to.be.below(d.total_price); pm.expect(d.status).to.eql(\"pending\"); });"
                 ]
               }
             }
@@ -1179,14 +1299,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_c}}/pay-online",
+              "raw": "{{base_url}}/bookings/{{booking_c}}/pay-qr",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "bookings",
                 "{{booking_c}}",
-                "pay-online"
+                "pay-qr"
               ]
             },
             "auth": {
@@ -1199,20 +1319,21 @@
                 }
               ]
             },
-            "description": "mode \"online\" gives a checkout_url (ABA PayWay sandbox). mode \"demo\" (admin setting) means the next request fakes the payment."
+            "description": "The payment is written to the database as a payment intent. The guest sees the QR code in the app. Nothing is paid yet."
           }
         },
         {
-          "name": "C: ask the server if it was paid",
+          "name": "C: \"I have paid\" (the server checks the payment in the database)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status is 200 or 409\", function () {",
-                  "  pm.expect([200,409]).to.include(pm.response.code);",
-                  "});"
+                  "pm.test(\"Status is 200\", function () {",
+                  "  pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Confirmed and paid with KHQR\", function () { var d = pm.response.json().data; pm.expect(d.status).to.eql(\"confirmed\"); pm.expect(d.paid).to.eql(true); pm.expect(d.payment_detail).to.eql(\"KHQR\"); });"
                 ]
               }
             }
@@ -1246,20 +1367,204 @@
                 }
               ]
             },
-            "description": "The server asks the payment company itself. It never trusts the app. 409 means \"not paid yet\", which is the right answer until the guest pays on the payment page."
+            "description": "The server finds the open QR payment in the database, checks it (open, not expired, right booking, right amount) and only then confirms the booking."
           }
         },
         {
-          "name": "C: demo payment (only works when the admin turned demo mode on)",
+          "name": "D: book another Double room",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status is 200 or 403\", function () {",
-                  "  pm.expect([200,403]).to.include(pm.response.code);",
-                  "});"
+                  "pm.test(\"Status is 201\", function () {",
+                  "  pm.expect([201]).to.include(pm.response.code);",
+                  "});",
+                  "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
+                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"booking_d\", String(__v)); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bookings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"room_type_id\": \"{{double_type_id}}\",\n  \"check_in_date\": \"{{stay_in}}\",\n  \"check_out_date\": \"{{stay_out}}\",\n  \"guests\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Booking D is paid with a card."
+          }
+        },
+        {
+          "name": "D: pay by card (any card number works)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "  pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Confirmed, paid with the card, discount applied\", function () { var d = pm.response.json().data; pm.expect(d.status).to.eql(\"confirmed\"); pm.expect(d.payment_detail).to.eql(\"Visa ending 4242\"); pm.expect(d.amount_due).to.be.below(d.total_price); });",
+                  "pm.test(\"The answer never contains the card number or the CVV\", function () { var body = pm.response.text(); pm.expect(body).to.not.include(\"4242 4242\"); pm.expect(body.toLowerCase()).to.not.include(\"cvv\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bookings/{{booking_d}}/pay-card",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings",
+                "{{booking_d}}",
+                "pay-card"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"number\": \"4242 4242 4242 4242\",\n  \"holder\": \"Sokha Demo\",\n  \"expiry\": \"12/99\",\n  \"cvv\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "No bank is called, so any card number works. The payment is saved in the database and checked there. Only the brand and the last 4 digits are kept."
+          }
+        },
+        {
+          "name": "D: pay by card again (error example)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 422\", function () {",
+                  "  pm.expect([422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Error code is not_pending\", function () { pm.expect(pm.response.json().code).to.eql(\"not_pending\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bookings/{{booking_d}}/pay-card",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bookings",
+                "{{booking_d}}",
+                "pay-card"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"number\": \"4242 4242 4242 4242\",\n  \"holder\": \"Sokha Demo\",\n  \"expiry\": \"12/99\",\n  \"cvv\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Already paid, so a second payment is refused. Money is never taken twice."
+          }
+        },
+        {
+          "name": "D: cancel and get the money back",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "  pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Cancelled and refunded in full\", function () { var d = pm.response.json().data; pm.expect(d.status).to.eql(\"cancelled\"); pm.expect(d.refunded_amount).to.be.above(0); });"
                 ]
               }
             }
@@ -1273,14 +1578,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_c}}/demo-pay",
+              "raw": "{{base_url}}/bookings/{{booking_d}}/cancel",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "bookings",
-                "{{booking_c}}",
-                "demo-pay"
+                "{{booking_d}}",
+                "cancel"
               ]
             },
             "auth": {
@@ -1293,54 +1598,7 @@
                 }
               ]
             },
-            "description": "403 when demo mode is off. That is the correct answer."
-          }
-        },
-        {
-          "name": "C: let the room go (release)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status is 200 or 422\", function () {",
-                  "  pm.expect([200,422]).to.include(pm.response.code);",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/bookings/{{booking_c}}/release",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "bookings",
-                "{{booking_c}}",
-                "release"
-              ]
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{customer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "description": "422 if demo-pay already confirmed it."
+            "description": "The payment is simulated, so the refund is a record in the database: the payment is marked refunded."
           }
         }
       ]
@@ -2052,7 +2310,7 @@
                 }
               ]
             },
-            "description": "Discount, check-in/out times, staff network rule and demo payment mode."
+            "description": "Discount, check-in/out times and the staff network rule."
           }
         },
         {
@@ -2165,7 +2423,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"online_discount_percent\": 99,\n  \"check_in_time\": \"25:00\",\n  \"check_out_time\": \"12:00\",\n  \"staff_login_restricted\": false,\n  \"allowed_networks\": [\n    \"not-a-network\"\n  ],\n  \"demo_payment_mode\": false\n}",
+              "raw": "{\n  \"online_discount_percent\": 99,\n  \"check_in_time\": \"25:00\",\n  \"check_out_time\": \"12:00\",\n  \"staff_login_restricted\": false,\n  \"allowed_networks\": [\n    \"not-a-network\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2674,54 +2932,6 @@
                 }
               ]
             }
-          }
-        },
-        {
-          "name": "Run the automatic jobs now",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status is 200\", function () {",
-                  "  pm.expect([200]).to.include(pm.response.code);",
-                  "});",
-                  "pm.test(\"Counts come back\", function () { var d = pm.response.json().data; [\"expired_holds\", \"no_shows\", \"refunded\", \"failed\"].forEach(function (k) { pm.expect(d).to.have.property(k); }); });"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/admin/maintenance/run",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "admin",
-                "maintenance",
-                "run"
-              ]
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{admin_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "description": "WARNING: this frees held rooms and marks guests whose check-in day has passed (after 12:00 the next day) as no-show, and refunds online payments. Only run it when you want that."
           }
         }
       ]
@@ -3562,6 +3772,54 @@
     {
       "name": "8. Manual only (do NOT run in the collection runner)",
       "item": [
+        {
+          "name": "Run the automatic jobs now (changes real bookings)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () {",
+                  "  pm.expect([200]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Counts come back\", function () { var d = pm.response.json().data; [\"expired_holds\", \"no_shows\", \"refunded\", \"failed\"].forEach(function (k) { pm.expect(d).to.have.property(k); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/maintenance/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "maintenance",
+                "run"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "DANGER: this changes real bookings. It cancels old holds, and after 12:00 on the day after check-in it marks guests as NO-SHOW and refunds their online payments. Run it by hand, only on a database you can lose. Never put it in a collection run."
+          }
+        },
         {
           "name": "Register (sends a real email with a 6-digit code)",
           "event": [

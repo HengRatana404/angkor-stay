@@ -5,7 +5,6 @@ class HotelSettings {
   final String checkOutTime; // "12:00"
   final bool staffLoginRestricted;
   final List<String> allowedNetworks;
-  final bool demoPaymentMode;
 
   const HotelSettings({
     required this.onlineDiscountPercent,
@@ -13,7 +12,6 @@ class HotelSettings {
     required this.checkOutTime,
     required this.staffLoginRestricted,
     required this.allowedNetworks,
-    required this.demoPaymentMode,
   });
 
   factory HotelSettings.fromJson(Map<String, dynamic> json) => HotelSettings(
@@ -22,7 +20,6 @@ class HotelSettings {
         checkOutTime: json['check_out_time'] as String,
         staffLoginRestricted: json['staff_login_restricted'] as bool,
         allowedNetworks: (json['allowed_networks'] as List).cast<String>(),
-        demoPaymentMode: json['demo_payment_mode'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
@@ -31,7 +28,6 @@ class HotelSettings {
         'check_out_time': checkOutTime,
         'staff_login_restricted': staffLoginRestricted,
         'allowed_networks': allowedNetworks,
-        'demo_payment_mode': demoPaymentMode,
       };
 }
 

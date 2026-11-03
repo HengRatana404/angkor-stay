@@ -44,7 +44,6 @@ class UpdateSettingsRequest extends FormRequest
                     $fail("\"{$value}\" is not a network. Use a form like 192.168.1.0/24.");
                 }
             }],
-            'demo_payment_mode' => ['required', 'boolean'],
         ];
     }
 

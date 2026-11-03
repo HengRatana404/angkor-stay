@@ -6,20 +6,26 @@ import '../core/api_error.dart';
 import '../models/booking.dart';
 import 'stay_provider.dart';
 
-/// The answer to "I want to pay online".
-class PayOnlineResult {
+/// An open QR payment: the text inside the QR code and how long it is good for.
+/// The payment is simulated, but the server writes it to the database and checks it there.
+class QrPayment {
   final Booking booking;
+  final String reference;
 
-  /// "online" (a real payment page from the payment company) or "demo" (faked, switched on by the admin).
-  final String mode;
-  final String? checkoutUrl;
+  /// The text to draw as a QR code (KHQR layout).
+  final String payload;
+  final double amount;
+  final String merchant;
+  final int secondsLeft;
 
-  /// A sentence from the server for the guest, such as the sandbox test card to use.
-  final String? hint;
-
-  const PayOnlineResult({required this.booking, required this.mode, required this.checkoutUrl, this.hint});
-
-  bool get isDemo => mode == 'demo';
+  const QrPayment({
+    required this.booking,
+    required this.reference,
+    required this.payload,
+    required this.amount,
+    required this.merchant,
+    required this.secondsLeft,
+  });
 }
 
 class BookingRepository {
@@ -53,25 +59,44 @@ class BookingRepository {
   Future<Booking> payAtHotel(int bookingId) =>
       _call(() async => _booking(await dio.post('/bookings/$bookingId/pay-at-hotel')));
 
-  /// "I will pay online." The server saves the discount and opens a payment page
-  /// (or, in demo mode, says the payment will be faked).
-  Future<PayOnlineResult> payOnline(int bookingId) => _call(() async {
-        final res = await dio.post('/bookings/$bookingId/pay-online');
-        return PayOnlineResult(
+  /// Pay with a card. Any card works (the payment is simulated), unless it has expired.
+  /// The server saves the payment, checks it in the database and confirms the booking.
+  /// Wrong fields come back as an [ApiError] with `fieldErrors` (number, holder, expiry, cvv).
+  Future<Booking> payByCard(
+    int bookingId, {
+    required String number,
+    required String holder,
+    required String expiry,
+    required String cvv,
+  }) =>
+      _call(() async {
+        final res = await dio.post('/bookings/$bookingId/pay-card', data: {
+          'number': number,
+          'holder': holder,
+          'expiry': expiry,
+          'cvv': cvv,
+        });
+        return _booking(res);
+      });
+
+  /// Pay with a QR code. The server opens the payment in the database and gives us the QR text.
+  Future<QrPayment> startQr(int bookingId) => _call(() async {
+        final res = await dio.post('/bookings/$bookingId/pay-qr');
+        final qr = res.data['qr'] as Map<String, dynamic>;
+        return QrPayment(
           booking: _booking(res),
-          mode: res.data['mode'] as String,
-          checkoutUrl: res.data['checkout_url'] as String?,
-          hint: res.data['checkout_hint'] as String?,
+          reference: qr['reference'] as String,
+          payload: qr['payload'] as String,
+          amount: (qr['amount'] as num).toDouble(),
+          merchant: (qr['merchant'] ?? 'Angkor Stay') as String,
+          secondsLeft: (qr['seconds_left'] as num).toInt(),
         );
       });
 
-  /// "I paid." The server does not take our word: it asks the payment company.
+  /// "I paid." The server does not take our word: it finds the open QR payment in the database,
+  /// checks it, and only then confirms the booking.
   Future<Booking> verifyPayment(int bookingId) =>
       _call(() async => _booking(await dio.post('/bookings/$bookingId/verify-payment')));
-
-  /// Demo mode only: the fake payment button.
-  Future<Booking> demoPay(int bookingId) =>
-      _call(() async => _booking(await dio.post('/bookings/$bookingId/demo-pay')));
 
   /// The guest's own bookings, newest first.
   Future<List<Booking>> mine() => _call(() async {
@@ -81,7 +106,7 @@ class BookingRepository {
             .toList();
       });
 
-  /// Cancel before check-in. Online money is sent back by the server first.
+  /// Cancel before check-in. A paid online booking is refunded in full.
   Future<Booking> cancel(int bookingId) =>
       _call(() async => _booking(await dio.post('/bookings/$bookingId/cancel')));
 

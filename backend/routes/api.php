@@ -67,10 +67,10 @@ Route::middleware(['auth:sanctum', 'hotel.network'])->group(function () {
         Route::post('/{id}/release', [BookingController::class, 'release'])->whereNumber('id');
         Route::post('/{id}/pay-at-hotel', [BookingController::class, 'payAtHotel'])->whereNumber('id');
 
-        // Pay online: choose it, then ask the server to check the payment.
-        Route::post('/{id}/pay-online', [OnlinePaymentController::class, 'start'])->whereNumber('id')->middleware('throttle:20,1');
+        // Pay online (simulated): a card, or a QR code. The server checks every payment in the database.
+        Route::post('/{id}/pay-card', [OnlinePaymentController::class, 'payByCard'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('/{id}/pay-qr', [OnlinePaymentController::class, 'startQr'])->whereNumber('id')->middleware('throttle:20,1');
         Route::post('/{id}/verify-payment', [OnlinePaymentController::class, 'verify'])->whereNumber('id')->middleware('throttle:30,1');
-        Route::post('/{id}/demo-pay', [OnlinePaymentController::class, 'demoPay'])->whereNumber('id')->middleware('throttle:20,1');
     });
 
     // Staff and admin: bookings, payment at the hotel, check-in and check-out.

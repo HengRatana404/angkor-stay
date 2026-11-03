@@ -30,9 +30,6 @@ return [
             '172.16.0.0/12',
             '192.168.0.0/16',
         ],
-
-        // Fake "paid" button for presentation day.
-        'demo_payment_mode' => false,
     ],
 
     /*

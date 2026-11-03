@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedSmallInteger('discount_percent')->default(0);
             $table->decimal('discount_amount', 10, 2)->default(0);
 
-            // The Stripe Checkout page the guest is paying on. Empty when nothing is open.
+            // An open payment page id. Replaced later by the payment_intents table.
             $table->string('checkout_session_id')->nullable()->index();
         });
     }

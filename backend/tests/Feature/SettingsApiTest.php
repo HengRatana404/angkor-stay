@@ -27,7 +27,6 @@ class SettingsApiTest extends TestCase
             'check_out_time' => '11:00',
             'staff_login_restricted' => true,
             'allowed_networks' => ['127.0.0.1/32', '192.168.123.0/24'],
-            'demo_payment_mode' => true,
         ], $override);
     }
 
@@ -41,7 +40,6 @@ class SettingsApiTest extends TestCase
             ->assertJsonPath('data.check_in_time', '14:00')
             ->assertJsonPath('data.check_out_time', '12:00')
             ->assertJsonPath('data.staff_login_restricted', true)
-            ->assertJsonPath('data.demo_payment_mode', false)
             ->assertJsonPath('your_ip', '127.0.0.1')
             ->assertJsonStructure(['data' => ['allowed_networks']]);
     }
@@ -55,25 +53,23 @@ class SettingsApiTest extends TestCase
             ->assertJsonPath('data.online_discount_percent', 20)
             ->assertJsonPath('data.check_in_time', '15:00')
             ->assertJsonPath('data.check_out_time', '11:00')
-            ->assertJsonPath('data.demo_payment_mode', true)
             ->assertJsonPath('data.allowed_networks', ['127.0.0.1/32', '192.168.123.0/24']);
 
         // And it is still there on the next visit.
         $this->getJson('/api/admin/settings')
             ->assertOk()
-            ->assertJsonPath('data.online_discount_percent', 20)
-            ->assertJsonPath('data.demo_payment_mode', true);
+            ->assertJsonPath('data.online_discount_percent', 20);
     }
 
     public function test_saved_values_keep_their_type(): void
     {
         $this->asAdmin();
-        $this->putJson('/api/admin/settings', $this->valid(['online_discount_percent' => '25', 'demo_payment_mode' => 0]))->assertOk();
+        $this->putJson('/api/admin/settings', $this->valid(['online_discount_percent' => '25']))->assertOk();
 
         $data = $this->getJson('/api/admin/settings')->json('data');
 
         $this->assertSame(25, $data['online_discount_percent']);
-        $this->assertFalse($data['demo_payment_mode']);
+        $this->assertArrayNotHasKey('demo_payment_mode', $data); // the demo switch is gone
         $this->assertTrue($data['staff_login_restricted']);
     }
 
@@ -136,7 +132,7 @@ class SettingsApiTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors([
                 'online_discount_percent', 'check_in_time', 'check_out_time',
-                'staff_login_restricted', 'allowed_networks', 'demo_payment_mode',
+                'staff_login_restricted', 'allowed_networks',
             ]);
     }
 

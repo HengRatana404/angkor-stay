@@ -25,7 +25,6 @@ const _startSettings = HotelSettings(
   checkOutTime: '12:00',
   staffLoginRestricted: true,
   allowedNetworks: ['127.0.0.1/32', '192.168.0.0/16'],
-  demoPaymentMode: false,
 );
 
 /// An admin server that answers from memory and remembers what it was asked.
@@ -469,7 +468,6 @@ void main() {
       expect(find.text('14:00'), findsOneWidget);
       expect(find.text('12:00'), findsOneWidget);
       expect(tester.widget<SwitchListTile>(find.byKey(const Key('restricted'))).value, isTrue);
-      expect(tester.widget<SwitchListTile>(find.byKey(const Key('demo-mode'))).value, isFalse);
       expect(_fieldText(tester, 'networks'), '127.0.0.1/32\n192.168.0.0/16');
       expect(find.text('This device connects from 192.168.123.6'), findsOneWidget);
     });
@@ -496,7 +494,6 @@ void main() {
             checkOutTime: '12:00',
             staffLoginRestricted: true,
             allowedNetworks: ['10.0.0.0/8'],
-            demoPaymentMode: false,
           ),
           '127.0.0.1',
         );
@@ -512,14 +509,12 @@ void main() {
       final admin = await openSettings(tester);
 
       await tester.enterText(find.byKey(const Key('discount')), '20');
-      await tester.tap(find.byKey(const Key('demo-mode')));
       await tester.enterText(find.byKey(const Key('networks')), ' 192.168.5.0/24 \n\n10.0.0.7, 10.1.0.0/16\n');
       await tester.tap(find.byKey(const Key('settings-save')));
       await tester.pumpAndSettle();
 
       final saved = admin.savedSettings!;
       expect(saved.onlineDiscountPercent, 20);
-      expect(saved.demoPaymentMode, isTrue);
       expect(saved.checkInTime, '14:00');
       expect(saved.checkOutTime, '12:00');
       expect(saved.staffLoginRestricted, isTrue);
@@ -636,7 +631,6 @@ void main() {
         'check_out_time': '12:00',
         'staff_login_restricted': true,
         'allowed_networks': ['10.0.0.0/8'],
-        'demo_payment_mode': false,
       };
 
       final settings = HotelSettings.fromJson(json);

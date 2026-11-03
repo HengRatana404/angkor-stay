@@ -8,7 +8,7 @@ use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/** Admin only: discount, times, hotel network and demo payment mode. */
+/** Admin only: discount, times and the hotel network. */
 class SettingsController extends Controller
 {
     public function __construct(private SettingsService $settings)

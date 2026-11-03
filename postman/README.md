@@ -1,6 +1,6 @@
 # Angkor Stay: Postman collection
 
-76 saved requests for every endpoint of the API, in 9 folders.
+80 saved requests for every endpoint of the API, in 9 folders.
 
 Files:
 
@@ -27,7 +27,7 @@ Files:
 
 Folder 1 logs in and saves the tokens, so it must run first. Later folders save ids such as `booking_a` for the folders after them.
 
-Run results on the last check: 67 requests, 105 checks, 0 failed (with Newman 6.2.3).
+Run results on the last check: 70 requests, 113 checks, 0 failed (with Newman 6.2.3). The other 10 requests (folder 8) are manual only.
 
 ## Folders
 
@@ -72,8 +72,8 @@ Ready-made screenshots of these requests (taken from the Postman app) are in the
 ## Good to know
 
 - **Rate limits:** the API allows 20 booking requests per minute. If you run the whole collection twice in a row, wait one minute.
-- **Pay online:** `mode: "online"` returns a `checkout_url` for the ABA PayWay **sandbox** (test money only). Open it in a browser to pay with the test card. If the admin turns on demo mode, `mode` is `"demo"` and `demo-pay` fakes the payment.
-- **Run the automatic jobs now** (folder 5, last request) frees old holds and marks guests whose check-in day has passed (after 12:00 the next day) as no-show, and refunds online payments. Run it only when you want that.
+- **Pay by card or QR:** the payments are simulated (no bank, no real money). Any card number works, but the expiry date must be `MM/YY` and not in the past: `11/26` is good until the end of November 2026. The QR request returns the KHQR text; "I have paid" makes the server check the payment in the database.
+- **Run the automatic jobs now** is in folder 8 (manual only) on purpose: it changes real bookings. It frees old holds and, after 12:00 on the day after check-in, marks guests as no-show and refunds their online payments. Never put it in a collection run, and never run it on a database you cannot lose.
 - **Folder 7** leaves one small room type, "Postman One-Room Suite", with its room set to maintenance. It is safe to run again.
 - **Folder 5** creates a staff account named "Postman Staff" each run and turns it off again. Accounts are never deleted, so old payments keep the staff name.
 - **Settings:** the "Save hotel settings" request sends back the values it just read, so a full run changes nothing. Edit the body to try a change.

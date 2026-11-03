@@ -4,47 +4,29 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\Payment;
-use App\Models\RoomType;
-use App\Payments\GatewayException;
+use App\Models\PaymentIntent;
+use App\Payments\KhqrPayload;
 use App\Payments\PaymentException;
-use App\Payments\PaymentGateway;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * The rules for paying online. Every method expects the booking row to be
- * locked by the caller (inside a database transaction).
+ * Paying online. The payments are SIMULATED: no bank, no real money, any card works
+ * (unless it has expired). But the rules are the real ones:
  *
- * The one rule that matters most: a booking is confirmed only after the
- * SERVER has checked the payment itself. Nothing the app says is trusted.
+ *  - every payment is first written to the database as a payment intent;
+ *  - a booking is confirmed only after the SERVER re-reads that intent from the database
+ *    and checks it (still open, not expired, right booking, right amount);
+ *  - nothing the app says is trusted.
+ *
+ * Every method expects the booking row to be locked by the caller (inside a transaction).
  */
 class OnlinePaymentService
 {
     /** A guest who starts paying online gets this long to finish, instead of the first 5 minutes. */
     public const PAYMENT_WINDOW_MINUTES = 15;
 
-    public const MODE_DEMO = 'demo';
-
-    /** A real payment page from the payment company (PayWay, or Stripe). */
-    public const MODE_ONLINE = 'online';
-
-    /** Stripe cannot take less than 50 cents. */
-    private const MIN_CENTS = 50;
-
-    public function __construct(
-        private PaymentGateway $gateway,
-        private SettingsService $settings,
-    ) {
-    }
-
-    /** 'demo' (faked, switched on by the admin), 'stripe', or null when nothing is set up. */
-    public function mode(): ?string
+    public function __construct(private SettingsService $settings)
     {
-        if ($this->settings->get('demo_payment_mode')) {
-            return self::MODE_DEMO;
-        }
-
-        return $this->gateway->isConfigured() ? self::MODE_ONLINE : null;
     }
 
     /** The discount for a price, from the admin's setting. @return array{percent: int, amount: float} */
@@ -56,208 +38,92 @@ class OnlinePaymentService
     }
 
     /**
-     * The guest chose to pay online. Saves the discount, gives them more time,
-     * and (outside demo mode) opens a Stripe payment page.
-     *
-     * @return array{mode: string, checkout_url: ?string, hint: ?string}
+     * The guest pays with a QR code. Opens a QR payment and returns it. The QR text is a real-format
+     * KHQR payload. The payment is only confirmed later, when the guest presses "I have paid" and
+     * the server verifies the intent in the database.
      *
      * @throws PaymentException
      */
-    public function start(Booking $booking, string $baseUrl): array
+    public function startQr(Booking $booking): PaymentIntent
     {
-        if ($booking->status !== Booking::STATUS_PENDING || $booking->isPaid()) {
-            throw new PaymentException('This booking can no longer be changed.', 'not_pending', 422);
-        }
-        if ($booking->isExpiredHold()) {
-            throw new PaymentException(
-                'Your 5 minutes ran out and the room may be taken. Please book again.',
-                'hold_expired',
-                409,
-            );
-        }
+        $this->assertPayable($booking);
 
-        $mode = $this->mode();
-        if ($mode === null) {
-            throw new PaymentException(
-                'Online payment is not set up yet. Please choose to pay at the hotel.',
-                'online_payment_unavailable',
-                503,
-            );
-        }
-
-        $discount = $this->discountFor((float) $booking->total_price);
-        $due = round((float) $booking->total_price - $discount['amount'], 2);
-        $cents = (int) round($due * 100);
-
-        $session = null;
-        if ($mode === self::MODE_ONLINE) {
-            if ($cents < self::MIN_CENTS) {
-                throw new PaymentException('This amount is too small to pay online.', 'amount_too_small', 422);
-            }
-
-            // Make the new page first. If Stripe fails, the old state stays as it was.
-            try {
-                $session = $this->gateway->createCheckout(
-                    $booking,
-                    $cents,
-                    rtrim($baseUrl, '/') . '/payment/success?booking=' . $booking->id,
-                    rtrim($baseUrl, '/') . '/payment/cancelled?booking=' . $booking->id,
-                );
-            } catch (GatewayException $e) {
-                Log::warning('Stripe could not open a payment page: ' . $e->getMessage());
-                throw new PaymentException('The payment company is not answering. Please try again.', 'provider_error', 502);
-            }
-        }
-
-        $oldSession = $booking->checkout_session_id;
-
-        $booking->update([
-            'payment_choice' => Booking::CHOICE_ONLINE,
-            'discount_percent' => $discount['percent'],
-            'discount_amount' => $discount['amount'],
-            'checkout_session_id' => $session['id'] ?? null,
-            // A running hold gets more time. A room already kept for the hotel stays kept.
-            'hold_expires_at' => $booking->hold_expires_at === null
-                ? null
-                : now()->addMinutes(self::PAYMENT_WINDOW_MINUTES),
+        $intent = $this->openIntent($booking, PaymentIntent::CHANNEL_QR);
+        $intent->update([
+            'qr_payload' => KhqrPayload::build($intent->reference, (float) $intent->amount, $intent->expires_at),
         ]);
 
-        // A guest who starts again must not be able to pay on the old page.
-        if ($oldSession && $oldSession !== ($session['id'] ?? null)) {
-            $this->closePageOrRefund($booking, $oldSession);
-        }
-
-        return [
-            'mode' => $mode,
-            'checkout_url' => $session['url'] ?? null,
-            'hint' => $mode === self::MODE_ONLINE ? $this->gateway->checkoutHint() : null,
-        ];
+        return $intent;
     }
 
     /**
-     * The guest says they paid. We do not take their word: ask Stripe.
+     * The guest pays with a card. No bank is called, so any card number works. The payment is written to the
+     * database, checked there, and settled in one go. Only the brand and the last 4 digits are kept.
      *
-     * @return array{outcome: string, booking: Booking, code?: string, message?: string}
-     *         outcome is "confirmed" or "refunded"
+     * @param  array{number: string, brand: string}  $card
      *
      * @throws PaymentException
      */
-    public function verify(Booking $booking): array
+    public function payByCard(Booking $booking, array $card): PaymentIntent
     {
-        if ($booking->isPaid()) {
-            return ['outcome' => 'confirmed', 'booking' => $booking]; // asked twice: no harm
-        }
+        $this->assertPayable($booking);
 
-        $sessionId = $booking->checkout_session_id;
-        if (! $sessionId) {
-            throw new PaymentException('No online payment was started for this booking.', 'no_payment_started', 409);
-        }
+        $intent = $this->openIntent($booking, PaymentIntent::CHANNEL_CARD, [
+            'card_brand' => $card['brand'],
+            'card_last4' => substr($card['number'], -4),
+        ]);
 
-        try {
-            $info = $this->gateway->retrieveCheckout($sessionId);
-        } catch (GatewayException $e) {
-            Log::warning('Stripe could not check a payment: ' . $e->getMessage());
-            throw new PaymentException('We could not check the payment yet. Please try again.', 'provider_error', 502);
-        }
-
-        if (! $info['paid']) {
-            if ($info['expired']) {
-                throw new PaymentException('The payment page expired. Please start again.', 'session_expired', 409);
-            }
-            throw new PaymentException('The payment is not finished yet.', 'payment_not_completed', 409);
-        }
-
-        // Stripe says it was paid. Make sure it was paid for THIS booking and the RIGHT amount.
-        $expectedCents = (int) round($booking->amount_due * 100);
-        if ($info['booking_id'] !== $booking->id || $info['amount_cents'] !== $expectedCents || $info['currency'] !== 'usd') {
-            Log::error("Payment check failed for booking {$booking->id}: Stripe reports "
-                . "booking {$info['booking_id']}, {$info['amount_cents']} {$info['currency']}, expected {$expectedCents} usd.");
-            throw new PaymentException(
-                'The payment does not match this booking. Please contact the hotel.',
-                'payment_mismatch',
-                422,
-            );
-        }
-
-        $reference = $info['payment_reference'] ?: $sessionId;
-
-        // The guest paid. But was the room still theirs?
-        if ($booking->status !== Booking::STATUS_PENDING) {
-            return $this->refundAndRecord(
-                $booking, $reference, 'booking_cancelled_refunded',
-                'This booking was cancelled before the payment arrived. Your money was sent back.',
-            );
-        }
-
-        if ($booking->isExpiredHold() && ! $this->roomStillFree($booking)) {
-            return $this->refundAndRecord(
-                $booking, $reference, 'room_gone_refunded',
-                'The room was taken before your payment arrived. Your money was sent back.',
-            );
-        }
-
-        $this->confirm($booking, $reference);
-
-        return ['outcome' => 'confirmed', 'booking' => $booking];
+        return $this->settle($booking, $intent);
     }
 
     /**
-     * Demo mode: no company, no money. The admin switched this on for the
-     * presentation. The server still does every check a real payment would need.
+     * The guest says they paid with the QR code. We do not take their word: we look for their open
+     * QR payment in the database, check it, and only then confirm the booking.
      *
      * @throws PaymentException
      */
-    public function demoPay(Booking $booking): Booking
+    public function verify(Booking $booking): Booking
     {
-        if (! $this->settings->get('demo_payment_mode')) {
-            throw new PaymentException('Demo payment is switched off.', 'demo_mode_off', 403);
-        }
         if ($booking->isPaid()) {
-            return $booking;
-        }
-        if ($booking->status !== Booking::STATUS_PENDING) {
-            throw new PaymentException('This booking can no longer be paid.', 'not_pending', 422);
-        }
-        if ($booking->payment_choice !== Booking::CHOICE_ONLINE) {
-            throw new PaymentException('Choose to pay online first.', 'no_payment_started', 409);
-        }
-        if ($booking->isExpiredHold()) {
-            throw new PaymentException(
-                'Your time ran out and the room may be taken. Please book again.',
-                'hold_expired',
-                409,
-            );
+            return $booking; // asked twice: no harm
         }
 
-        $this->confirm($booking, 'demo-' . Str::lower(Str::random(12)));
+        $intent = $booking->intents()
+            ->where('channel', PaymentIntent::CHANNEL_QR)
+            ->pending()
+            ->latest('id')
+            ->first();
+
+        if (! $intent) {
+            $expired = $booking->intents()->where('status', PaymentIntent::STATUS_EXPIRED)->exists();
+
+            throw $expired
+                ? new PaymentException('The QR code expired. Please start again.', 'payment_expired', 409)
+                : new PaymentException('No QR payment was started for this booking.', 'no_payment_started', 409);
+        }
+
+        $this->assertPayable($booking);
+        $this->settle($booking, $intent);
 
         return $booking;
     }
 
     /**
-     * The guest went another way (hotel, cancel) or staff took the money at
-     * the desk. Close any open payment page, so it can never be paid later,
-     * and forget the discount, which only belongs to paying online.
+     * The guest went another way (hotel, cancel) or staff took the money at the desk.
+     * Close every open payment, so it can never be settled later, and forget the discount,
+     * which only belongs to paying online.
      */
     public function abandon(Booking $booking): void
     {
-        if ($booking->checkout_session_id) {
-            $this->closePageOrRefund($booking, $booking->checkout_session_id);
-        }
+        $booking->intents()->pending()->update(['status' => PaymentIntent::STATUS_CANCELLED]);
 
-        $booking->update([
-            'checkout_session_id' => null,
-            'discount_percent' => 0,
-            'discount_amount' => 0,
-        ]);
+        $booking->update(['discount_percent' => 0, 'discount_amount' => 0]);
     }
 
     /**
      * Gives the money back for every online payment of this booking (always the full amount).
-     * Demo payments were never real, so they are only marked as refunded.
-     * Returns the money given back. The caller holds a lock on the booking and a transaction.
-     *
-     * @throws PaymentException when the payment company refuses, so nothing else should change
+     * The payment is simulated, so a refund is a record in the database: the payment and its
+     * intent are marked refunded. Returns the money given back.
      */
     public function refundOnlinePayments(Booking $booking): float
     {
@@ -270,21 +136,8 @@ class OnlinePaymentService
             ->get();
 
         foreach ($payments as $payment) {
-            if (! str_starts_with((string) $payment->reference, 'demo-')) {
-                try {
-                    $this->gateway->refund((string) $payment->reference);
-                } catch (GatewayException $e) {
-                    Log::critical("REFUND FAILED for booking {$booking->id} ({$payment->reference}): " . $e->getMessage());
-                    throw new PaymentException(
-                        'We could not send your money back yet. Nothing was cancelled. '
-                        . "Please try again, or contact the hotel with booking number {$booking->code}.",
-                        'refund_failed',
-                        502,
-                    );
-                }
-            }
-
             $payment->update(['status' => Payment::STATUS_REFUNDED]);
+            PaymentIntent::where('reference', $payment->reference)->update(['status' => PaymentIntent::STATUS_REFUNDED]);
             $total += (float) $payment->amount;
         }
 
@@ -293,15 +146,85 @@ class OnlinePaymentService
 
     // --------------------------------------------------------------- inside
 
-    private function confirm(Booking $booking, string $reference): void
+    /** @throws PaymentException */
+    private function assertPayable(Booking $booking): void
     {
+        if ($booking->status !== Booking::STATUS_PENDING || $booking->isPaid()) {
+            throw new PaymentException('This booking can no longer be changed.', 'not_pending', 422);
+        }
+        if ($booking->isExpiredHold()) {
+            throw new PaymentException(
+                'Your 5 minutes ran out and the room may be taken. Please book again.',
+                'hold_expired',
+                409,
+            );
+        }
+    }
+
+    /**
+     * Saves the discount, gives the guest more time, closes any earlier open payment and
+     * writes a new payment intent for the amount to pay.
+     */
+    private function openIntent(Booking $booking, string $channel, array $extra = []): PaymentIntent
+    {
+        $discount = $this->discountFor((float) $booking->total_price);
+
+        $booking->update([
+            'payment_choice' => Booking::CHOICE_ONLINE,
+            'discount_percent' => $discount['percent'],
+            'discount_amount' => $discount['amount'],
+            // A running hold gets more time. A room already kept for the hotel stays kept.
+            'hold_expires_at' => $booking->hold_expires_at === null
+                ? null
+                : now()->addMinutes(self::PAYMENT_WINDOW_MINUTES),
+        ]);
+
+        // A guest who starts again must not be able to pay on the old one.
+        $booking->intents()->pending()->update(['status' => PaymentIntent::STATUS_CANCELLED]);
+
+        return $booking->intents()->create(array_merge([
+            'channel' => $channel,
+            'amount' => $booking->amount_due,
+            'status' => PaymentIntent::STATUS_PENDING,
+            'reference' => 'AS' . $booking->id . '-' . Str::upper(Str::random(8)),
+            'expires_at' => now()->addMinutes(self::PAYMENT_WINDOW_MINUTES),
+        ], $extra));
+    }
+
+    /**
+     * The simulated bank says yes, but only after the server has checked the intent in the database.
+     * Re-reads the row (locked), so two taps can never settle it twice.
+     *
+     * @throws PaymentException
+     */
+    private function settle(Booking $booking, PaymentIntent $intent): PaymentIntent
+    {
+        $row = PaymentIntent::whereKey($intent->id)->lockForUpdate()->firstOrFail();
+
+        if ($row->status !== PaymentIntent::STATUS_PENDING) {
+            throw new PaymentException('This payment is not open any more. Please start again.', 'payment_not_open', 409);
+        }
+        if ($row->booking_id !== $booking->id) {
+            throw new PaymentException('The payment does not match this booking.', 'payment_mismatch', 422);
+        }
+        if ($row->isExpired()) {
+            // (The row is tidied to "expired" by the clean-up job. We cannot write it here:
+            // this error rolls the transaction back.)
+            throw new PaymentException('The payment expired. Please start again.', 'payment_expired', 409);
+        }
+        if (round((float) $row->amount, 2) !== round((float) $booking->amount_due, 2)) {
+            throw new PaymentException('The amount does not match this booking. Please start again.', 'payment_mismatch', 422);
+        }
+
+        $row->update(['status' => PaymentIntent::STATUS_PAID, 'paid_at' => now()]);
+
         Payment::create([
             'booking_id' => $booking->id,
-            'amount' => $booking->amount_due,
+            'amount' => $row->amount,
             'method' => Payment::METHOD_ONLINE,
             'status' => Payment::STATUS_PAID,
             'received_by' => null, // nobody took this money by hand
-            'reference' => $reference,
+            'reference' => $row->reference,
             'paid_at' => now(),
         ]);
 
@@ -309,96 +232,8 @@ class OnlinePaymentService
             'status' => Booking::STATUS_CONFIRMED,
             'payment_choice' => Booking::CHOICE_ONLINE,
             'hold_expires_at' => null,
-            'checkout_session_id' => null,
-        ]);
-    }
-
-    /** The money arrived but the room cannot be given. Pay it back and keep a record. */
-    private function refundAndRecord(Booking $booking, string $reference, string $code, string $message): array
-    {
-        try {
-            $this->gateway->refund($reference);
-        } catch (GatewayException $e) {
-            Log::critical("MONEY STUCK: booking {$booking->id} was paid ({$reference}) but could not be refunded: " . $e->getMessage());
-            throw new PaymentException(
-                'Your payment arrived but the room is gone, and the automatic refund failed. '
-                . "Please contact the hotel and tell them your booking number {$booking->code}.",
-                'refund_failed',
-                502,
-            );
-        }
-
-        Payment::create([
-            'booking_id' => $booking->id,
-            'amount' => $booking->amount_due,
-            'method' => Payment::METHOD_ONLINE,
-            'status' => Payment::STATUS_REFUNDED,
-            'reference' => $reference,
-            'paid_at' => now(),
         ]);
 
-        if ($booking->status === Booking::STATUS_PENDING) {
-            $booking->update(['status' => Booking::STATUS_CANCELLED, 'hold_expires_at' => null]);
-        }
-        $booking->update(['checkout_session_id' => null]);
-
-        return ['outcome' => 'refunded', 'booking' => $booking, 'code' => $code, 'message' => $message];
-    }
-
-    /** After the 5 minutes the room may have gone to someone else. Is it still free? */
-    private function roomStillFree(Booking $booking): bool
-    {
-        $room = $booking->room;
-
-        // Lock the room type, the same way booking does, so nobody books it at this very moment.
-        RoomType::whereKey($room->room_type_id)->lockForUpdate()->first();
-
-        if ($room->status !== 'available') {
-            return false;
-        }
-
-        return ! Booking::where('room_id', $booking->room_id)
-            ->where('id', '!=', $booking->id)
-            ->blocking()
-            ->overlapping($booking->check_in_date->toDateString(), $booking->check_out_date->toDateString())
-            ->exists();
-    }
-
-    /**
-     * Closes a payment page so nobody can pay on it later. Closing fails when the
-     * page was already paid, perhaps at this very moment, while the guest was
-     * cancelling. Then the money must go back, so we check and refund.
-     */
-    private function closePageOrRefund(Booking $booking, string $sessionId): void
-    {
-        try {
-            $this->gateway->expireCheckout($sessionId);
-
-            return;
-        } catch (GatewayException $e) {
-            Log::notice("Could not close payment page {$sessionId}: " . $e->getMessage());
-        }
-
-        try {
-            $info = $this->gateway->retrieveCheckout($sessionId);
-
-            if ($info['paid']) {
-                $reference = $info['payment_reference'] ?: $sessionId;
-                $this->gateway->refund($reference);
-
-                Payment::create([
-                    'booking_id' => $booking->id,
-                    'amount' => round($info['amount_cents'] / 100, 2),
-                    'method' => Payment::METHOD_ONLINE,
-                    'status' => Payment::STATUS_REFUNDED,
-                    'reference' => $reference,
-                    'paid_at' => now(),
-                ]);
-
-                Log::notice("Booking {$booking->id}: the guest paid while changing their mind, so the payment was refunded.");
-            }
-        } catch (GatewayException $e) {
-            Log::critical("MONEY MAY BE STUCK: could not close or check payment page {$sessionId} (booking {$booking->id}): " . $e->getMessage());
-        }
+        return $row;
     }
 }

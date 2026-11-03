@@ -4,51 +4,64 @@ namespace Tests\Feature;
 
 use App\Models\Booking;
 use App\Models\Payment;
-use App\Models\Room;
+use App\Models\PaymentIntent;
 use App\Models\User;
-use App\Payments\PaymentGateway;
+use App\Payments\KhqrPayload;
 use App\Services\SettingsService;
+use Carbon\Carbon;
 use Database\Seeders\RoomSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\MakesBookings;
 use Tests\Concerns\MakesUsers;
-use Tests\Support\FakeGateway;
 use Tests\TestCase;
 
-/** Paying online: the discount, the payment page, and the server checking the payment itself. */
+/**
+ * Paying online: a card or a QR code. The payments are simulated, but every payment is written to
+ * the database and checked there before a booking is confirmed.
+ */
 class OnlinePaymentTest extends TestCase
 {
     use MakesBookings;
     use MakesUsers;
     use RefreshDatabase;
 
-    private FakeGateway $gateway;
-
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RoomSeeder::class);
-
-        $this->gateway = new FakeGateway();
-        $this->app->instance(PaymentGateway::class, $this->gateway);
     }
 
-    private function settings(): SettingsService
+    /** A card of any kind. Not a real number: nothing is ever charged. */
+    private function card(array $over = []): array
     {
-        return app(SettingsService::class);
+        return array_merge([
+            'number' => '4242 4242 4242 4242',
+            'holder' => 'Sokha Demo',
+            'expiry' => '11/26',
+            'cvv' => '987',
+        ], $over);
     }
 
-    private function demoMode(bool $on = true): void
+    private function at(int $y, int $m, int $d, int $h = 10, int $min = 0): void
     {
-        $this->settings()->update(['demo_payment_mode' => $on]);
+        $this->travelTo(Carbon::create($y, $m, $d, $h, $min, 0, config('app.timezone')));
     }
 
-    private function startOnline(User $guest, Booking $booking)
+    private function payCard(User $guest, Booking $booking, array $card = [])
     {
         Sanctum::actingAs($guest);
 
-        return $this->postJson("/api/bookings/{$booking->id}/pay-online");
+        return $this->postJson("/api/bookings/{$booking->id}/pay-card", $this->card($card));
+    }
+
+    private function startQr(User $guest, Booking $booking)
+    {
+        Sanctum::actingAs($guest);
+
+        return $this->postJson("/api/bookings/{$booking->id}/pay-qr");
     }
 
     private function verify(User $guest, Booking $booking)
@@ -58,26 +71,472 @@ class OnlinePaymentTest extends TestCase
         return $this->postJson("/api/bookings/{$booking->id}/verify-payment");
     }
 
-    private function demoPay(User $guest, Booking $booking)
-    {
-        Sanctum::actingAs($guest);
+    // ------------------------------------------------------------- card: the money side
 
-        return $this->postJson("/api/bookings/{$booking->id}/demo-pay");
-    }
-
-    /** A guest who started paying online and then paid on Stripe's page. */
-    private function paidOnStripe(?array $override = []): array
+    public function test_a_card_payment_confirms_the_booking_and_is_saved_in_the_database(): void
     {
         $guest = $this->makeUser('customer');
         $booking = $this->makeBooking($guest); // 2 nights x $15 = $30, 15% off = $25.50
-        $this->startOnline($guest, $booking)->assertOk();
-        $session = $this->gateway->lastSessionId();
-        $this->gateway->pay($session, $override);
 
-        return [$guest, $booking, $session];
+        $this->payCard($guest, $booking)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'confirmed')
+            ->assertJsonPath('data.paid', true)
+            ->assertJsonPath('data.payment_method', 'online')
+            ->assertJsonPath('data.payment_detail', 'Visa ending 4242')
+            ->assertJsonPath('data.amount_due', 25.5)
+            ->assertJsonPath('data.hold_seconds_left', null)
+            ->assertJsonPath('payment.channel', 'card');
+
+        $intent = PaymentIntent::firstOrFail();
+        $this->assertSame('paid', $intent->status);
+        $this->assertSame($booking->id, $intent->booking_id);
+        $this->assertSame('4242', $intent->card_last4);
+        $this->assertSame('Visa', $intent->card_brand);
+        $this->assertEquals(25.5, $intent->amount);
+
+        $payment = Payment::firstOrFail();
+        $this->assertSame('online', $payment->method);
+        $this->assertSame('paid', $payment->status);
+        $this->assertNull($payment->received_by);
+        $this->assertSame($intent->reference, $payment->reference);
+        $this->assertEquals(25.5, $payment->amount);
+
+        $booking->refresh();
+        $this->assertSame(15, $booking->discount_percent);
+        $this->assertEquals(4.5, $booking->discount_amount);
     }
 
-    // ------------------------------------------------------- public settings
+    public function test_the_full_card_number_and_the_cvv_are_never_saved_or_sent_back(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+
+        $response = $this->payCard($guest, $booking, ['number' => '5500 0000 0000 0004', 'cvv' => '9876'])->assertOk();
+
+        $this->assertFalse(Schema::hasColumn('payment_intents', 'cvv'));
+        $this->assertFalse(Schema::hasColumn('payment_intents', 'card_number'));
+
+        $saved = json_encode([DB::table('payment_intents')->get(), DB::table('payments')->get(), DB::table('bookings')->get()]);
+        $this->assertStringNotContainsString('5500000000000004', $saved);
+        $this->assertStringContainsString('0004', $saved); // only the last 4
+
+        $body = $response->getContent();
+        $this->assertStringNotContainsString('5500000000000004', $body);
+        $this->assertStringNotContainsString('9876', $body);
+        $this->assertStringNotContainsString('cvv', strtolower($body));
+    }
+
+    public function test_any_card_number_works_it_does_not_have_to_pass_a_bank_check(): void
+    {
+        foreach (['1234 5678 9012 3456', '0000000000000', '9999-9999-9999-9999'] as $i => $number) {
+            $guest = $this->makeUser('customer');
+            $booking = $this->makeBooking($guest, ['in' => 10 + $i * 5]);
+
+            $this->payCard($guest, $booking, ['number' => $number])->assertOk()->assertJsonPath('data.status', 'confirmed');
+        }
+    }
+
+    public function test_the_brand_comes_from_the_first_digits(): void
+    {
+        $cases = [['4111111111111111', 'Visa'], ['5500000000000004', 'Mastercard'], ['2221000000000009', 'Mastercard'],
+            ['378282246310005', 'Amex'], ['6011111111111117', 'Card']];
+
+        $day = 5;
+        foreach ($cases as [$number, $brand]) {
+            $guest = $this->makeUser('customer');
+            $booking = $this->makeBooking($guest, ['in' => $day += 3]);
+
+            $this->payCard($guest, $booking, ['number' => $number])
+                ->assertOk()
+                ->assertJsonPath('data.payment_detail', $brand . ' ending ' . substr($number, -4));
+        }
+    }
+
+    // ------------------------------------------------------------- card: the expiry date
+
+    public function test_a_card_that_expires_11_26_is_good_all_through_november_2026(): void
+    {
+        $guest = $this->makeUser('customer');
+
+        $this->at(2026, 11, 3);
+        $first = $this->makeBooking($guest);
+        $this->payCard($guest, $first)->assertOk();
+
+        // The very last minute of November.
+        $this->at(2026, 11, 30, 23, 59);
+        $second = $this->makeBooking($guest, ['in' => 20]);
+        $this->payCard($guest, $second)->assertOk()->assertJsonPath('data.status', 'confirmed');
+    }
+
+    public function test_a_card_that_expires_11_26_is_expired_from_1_december_2026(): void
+    {
+        $guest = $this->makeUser('customer');
+
+        $this->at(2026, 12, 1, 0, 0);
+        $booking = $this->makeBooking($guest);
+
+        $this->payCard($guest, $booking)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('expiry')
+            ->assertJsonPath('errors.expiry.0', 'This card has expired.');
+
+        $this->assertSame('pending', $booking->fresh()->status);
+        $this->assertSame(0, PaymentIntent::count());
+        $this->assertSame(0, Payment::count());
+    }
+
+    public function test_last_month_is_expired_and_a_far_future_date_is_fine(): void
+    {
+        $guest = $this->makeUser('customer');
+        $this->at(2026, 11, 3);
+        $booking = $this->makeBooking($guest);
+
+        $this->payCard($guest, $booking, ['expiry' => '10/26'])->assertStatus(422)->assertJsonPath('errors.expiry.0', 'This card has expired.');
+        $this->payCard($guest, $booking, ['expiry' => '12/20'])->assertStatus(422)->assertJsonValidationErrors('expiry');
+        $this->payCard($guest, $booking, ['expiry' => '12/99'])->assertOk();
+    }
+
+    public function test_the_expiry_date_must_be_written_mm_slash_yy(): void
+    {
+        $guest = $this->makeUser('customer');
+        $this->at(2026, 11, 3);
+        $booking = $this->makeBooking($guest);
+
+        foreach (['13/26', '00/26', '1/26', '11/2026', '1126', 'abcd', ''] as $bad) {
+            $this->payCard($guest, $booking, ['expiry' => $bad])->assertStatus(422)->assertJsonValidationErrors('expiry');
+        }
+    }
+
+    public function test_the_other_card_fields_are_checked_for_their_shape(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+
+        $this->payCard($guest, $booking, ['number' => '1234'])->assertStatus(422)->assertJsonValidationErrors('number');
+        $this->payCard($guest, $booking, ['number' => 'abcd efgh ijkl'])->assertStatus(422)->assertJsonValidationErrors('number');
+        $this->payCard($guest, $booking, ['holder' => ''])->assertStatus(422)->assertJsonValidationErrors('holder');
+        $this->payCard($guest, $booking, ['cvv' => '12'])->assertStatus(422)->assertJsonValidationErrors('cvv');
+        $this->payCard($guest, $booking, ['cvv' => '12a'])->assertStatus(422)->assertJsonValidationErrors('cvv');
+
+        Sanctum::actingAs($guest);
+        $this->postJson("/api/bookings/{$booking->id}/pay-card", [])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['number', 'holder', 'expiry', 'cvv']);
+
+        $this->assertSame(0, Payment::count());
+    }
+
+    // ------------------------------------------------------------- card: who and when
+
+    public function test_a_card_cannot_pay_twice(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+
+        $this->payCard($guest, $booking)->assertOk();
+        $this->payCard($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'not_pending');
+
+        $this->assertSame(1, Payment::count());
+        $this->assertSame(1, PaymentIntent::count());
+    }
+
+    public function test_a_hold_that_ran_out_cannot_be_paid(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest, ['hold' => now()->subMinute()]);
+
+        $this->payCard($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'hold_expired');
+        $this->assertSame(0, Payment::count());
+    }
+
+    public function test_a_cancelled_booking_cannot_be_paid(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest, ['status' => Booking::STATUS_CANCELLED, 'hold' => null]);
+
+        $this->payCard($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'not_pending');
+        $this->startQr($guest, $booking)->assertStatus(422);
+    }
+
+    public function test_nobody_can_pay_for_someone_elses_booking_or_without_logging_in(): void
+    {
+        $booking = $this->makeBooking($this->makeUser('customer'));
+
+        $this->payCard($this->makeUser('customer'), $booking)->assertNotFound();
+        $this->startQr($this->makeUser('customer'), $booking)->assertNotFound();
+        $this->verify($this->makeUser('customer'), $booking)->assertNotFound();
+
+        $this->app['auth']->forgetGuards();
+        $this->postJson("/api/bookings/{$booking->id}/pay-card", $this->card())->assertUnauthorized();
+        $this->assertSame(0, Payment::count());
+    }
+
+    public function test_a_room_kept_for_the_hotel_can_still_be_paid_by_card_and_stays_kept_until_then(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeKeptBooking($guest);
+
+        $this->payCard($guest, $booking)->assertOk()->assertJsonPath('data.status', 'confirmed');
+    }
+
+    // ------------------------------------------------------------- QR
+
+    public function test_starting_a_qr_payment_gives_a_real_format_code_and_saves_it_in_the_database(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest, ['hold' => now()->addMinutes(1)]);
+
+        $response = $this->startQr($guest, $booking)
+            ->assertOk()
+            ->assertJsonPath('data.payment_choice', 'online')
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('qr.amount', 25.5)
+            ->assertJsonPath('qr.currency', 'USD');
+
+        $intent = PaymentIntent::firstOrFail();
+        $this->assertSame('pending', $intent->status);
+        $this->assertSame('khqr', $intent->channel);
+        $this->assertEquals(25.5, $intent->amount);
+        $this->assertSame($intent->reference, $response->json('qr.reference'));
+        $this->assertSame($intent->qr_payload, $response->json('qr.payload'));
+
+        // The 1-minute hold was stretched to the 15-minute payment window.
+        $this->assertGreaterThan(14 * 60, $response->json('data.hold_seconds_left'));
+        $this->assertLessThanOrEqual(15 * 60, $response->json('qr.seconds_left'));
+
+        // Nothing is paid yet.
+        $this->assertSame(0, Payment::count());
+        $this->assertSame('pending', $booking->fresh()->status);
+    }
+
+    public function test_the_qr_text_follows_the_khqr_layout(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+
+        $payload = $this->startQr($guest, $booking)->json('qr.payload');
+        $tags = KhqrPayload::parse($payload);
+
+        $this->assertStringStartsWith('00020101021', $payload);
+        $this->assertTrue(KhqrPayload::isValid($payload), 'the CRC at the end must match');
+        $this->assertSame('01', $tags['00']);
+        $this->assertSame('12', $tags['01']);
+        $this->assertSame('840', $tags['53']);           // US dollar
+        $this->assertSame('25.50', $tags['54']);         // the discounted price
+        $this->assertSame('KH', $tags['58']);
+        $this->assertSame('Angkor Stay', $tags['59']);
+        $this->assertSame('7011', $tags['52']);
+        $this->assertSame(PaymentIntent::first()->reference, KhqrPayload::parse($tags['62'])['01']); // bill number
+        $this->assertStringContainsString(KhqrPayload::DEMO_ACCOUNT, $tags['29']);                  // a demo account
+    }
+
+    public function test_a_changed_qr_text_fails_the_crc_check(): void
+    {
+        $payload = KhqrPayload::build('AS1-TEST1234', 25.5, now()->addMinutes(15));
+
+        $this->assertTrue(KhqrPayload::isValid($payload));
+        $this->assertFalse(KhqrPayload::isValid(str_replace('25.50', '2.50', $payload)));
+        $this->assertFalse(KhqrPayload::isValid(substr($payload, 0, -1) . 'X'));
+        $this->assertFalse(KhqrPayload::isValid('hello'));
+    }
+
+    public function test_pressing_i_have_paid_without_a_qr_payment_is_refused(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+
+        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'no_payment_started');
+        $this->assertSame(0, Payment::count());
+    }
+
+    public function test_verifying_a_qr_payment_finds_it_in_the_database_and_confirms_the_booking(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $reference = $this->startQr($guest, $booking)->json('qr.reference');
+
+        $this->verify($guest, $booking)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'confirmed')
+            ->assertJsonPath('data.paid', true)
+            ->assertJsonPath('data.payment_detail', 'KHQR');
+
+        $this->assertSame('paid', PaymentIntent::where('reference', $reference)->value('status'));
+        $payment = Payment::firstOrFail();
+        $this->assertSame($reference, $payment->reference);
+        $this->assertSame('online', $payment->method);
+        $this->assertEquals(25.5, $payment->amount);
+    }
+
+    public function test_pressing_i_have_paid_twice_does_not_charge_twice(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $this->startQr($guest, $booking);
+
+        $this->verify($guest, $booking)->assertOk();
+        $this->verify($guest, $booking)->assertOk()->assertJsonPath('data.status', 'confirmed');
+
+        $this->assertSame(1, Payment::count());
+    }
+
+    public function test_starting_a_new_qr_closes_the_old_one(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+
+        $old = $this->startQr($guest, $booking)->json('qr.reference');
+        $new = $this->startQr($guest, $booking)->json('qr.reference');
+
+        $this->assertNotSame($old, $new);
+        $this->assertSame('cancelled', PaymentIntent::where('reference', $old)->value('status'));
+        $this->assertSame('pending', PaymentIntent::where('reference', $new)->value('status'));
+
+        $this->verify($guest, $booking)->assertOk();
+        $this->assertSame($new, Payment::firstOrFail()->reference);
+    }
+
+    public function test_a_qr_payment_that_nobody_finished_in_time_is_refused_and_later_marked_expired(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeKeptBooking($guest); // no hold timer, so only the QR clock runs
+        $this->startQr($guest, $booking);
+
+        $this->travel(16)->minutes();
+
+        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'payment_expired');
+        $this->assertSame(0, Payment::count());
+        $this->assertSame('pending', $booking->fresh()->status);
+
+        $this->artisan('hotel:clean-up')->assertSuccessful();
+        $this->assertSame('expired', PaymentIntent::firstOrFail()->status);
+
+        // After the tidy-up the message is the same.
+        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'payment_expired');
+    }
+
+    public function test_a_qr_started_on_a_running_hold_runs_out_with_the_hold(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $this->startQr($guest, $booking);
+
+        $this->travel(16)->minutes();
+
+        $this->verify($guest, $booking)->assertStatus(409);
+        $this->assertSame(0, Payment::count());
+    }
+
+    public function test_a_payment_whose_amount_was_changed_in_the_database_is_not_accepted(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $this->startQr($guest, $booking);
+
+        PaymentIntent::query()->update(['amount' => 1.00]); // someone tampers with the row
+
+        $this->verify($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'payment_mismatch');
+        $this->assertSame(0, Payment::count());
+        $this->assertSame('pending', $booking->fresh()->status);
+    }
+
+    public function test_a_payment_that_belongs_to_another_booking_is_not_accepted(): void
+    {
+        $guest = $this->makeUser('customer');
+        $mine = $this->makeBooking($guest);
+        $other = $this->makeBooking($guest, ['in' => 30]);
+        $this->startQr($guest, $mine);
+
+        PaymentIntent::query()->update(['booking_id' => $other->id]);
+
+        $this->verify($guest, $mine)->assertStatus(409); // it is not even found for this booking
+        $this->assertSame(0, Payment::count());
+    }
+
+    // ------------------------------------------------------------- choosing another way
+
+    public function test_choosing_the_hotel_after_starting_a_qr_drops_the_discount_and_closes_the_payment(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $this->startQr($guest, $booking);
+        $this->assertSame(15, $booking->fresh()->discount_percent);
+
+        Sanctum::actingAs($guest);
+        $this->postJson("/api/bookings/{$booking->id}/pay-at-hotel")->assertOk()->assertJsonPath('data.amount_due', 30);
+
+        $this->assertSame('cancelled', PaymentIntent::firstOrFail()->status);
+        $this->assertSame(0, $booking->fresh()->discount_percent);
+
+        $this->verify($guest, $booking)->assertStatus(409); // the old QR can never be paid now
+        $this->assertSame(0, Payment::count());
+    }
+
+    public function test_releasing_the_room_closes_the_open_payment(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $this->startQr($guest, $booking);
+
+        Sanctum::actingAs($guest);
+        $this->postJson("/api/bookings/{$booking->id}/release")->assertOk();
+
+        $this->assertSame('cancelled', PaymentIntent::firstOrFail()->status);
+        $this->verify($guest, $booking)->assertStatus(409);
+    }
+
+    public function test_staff_taking_payment_at_the_desk_closes_the_open_qr_and_charges_the_full_price(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeKeptBooking($guest);
+        $this->startQr($guest, $booking);
+
+        Sanctum::actingAs($this->makeUser('staff'));
+        $this->postJson("/api/staff/bookings/{$booking->id}/payments", ['method' => 'cash'])
+            ->assertStatus(201)
+            ->assertJsonPath('data.status', 'confirmed');
+
+        $this->assertSame('cancelled', PaymentIntent::firstOrFail()->status);
+        $payment = Payment::firstOrFail();
+        $this->assertSame('cash', $payment->method);
+        $this->assertEquals(30, $payment->amount); // no online discount at the desk
+    }
+
+    public function test_staff_see_an_online_payment_without_a_receiving_staff_member(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $this->payCard($guest, $booking)->assertOk();
+
+        Sanctum::actingAs($this->makeUser('staff'));
+        $this->getJson("/api/staff/bookings/{$booking->id}")
+            ->assertOk()
+            ->assertJsonPath('data.payments.0.method', 'online')
+            ->assertJsonPath('data.payments.0.received_by', null)
+            ->assertJsonPath('data.discount_percent', 15)
+            ->assertJsonPath('data.amount_due', 25.5);
+    }
+
+    // ------------------------------------------------------------- refunds (simulated, in the database)
+
+    public function test_cancelling_a_card_booking_marks_the_payment_and_the_intent_refunded(): void
+    {
+        $guest = $this->makeUser('customer');
+        $booking = $this->makeBooking($guest);
+        $this->payCard($guest, $booking)->assertOk();
+
+        Sanctum::actingAs($guest);
+        $this->postJson("/api/bookings/{$booking->id}/cancel")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled')
+            ->assertJsonPath('data.refunded_amount', 25.5);
+
+        $this->assertSame('refunded', Payment::firstOrFail()->status);
+        $this->assertSame('refunded', PaymentIntent::firstOrFail()->status);
+    }
+
+    // ------------------------------------------------------------- settings stay public
 
     public function test_the_discount_and_times_are_public_and_follow_the_admin(): void
     {
@@ -89,7 +548,7 @@ class OnlinePaymentTest extends TestCase
                 'check_out_time' => '12:00',
             ]]);
 
-        $this->settings()->update(['online_discount_percent' => 25, 'check_in_time' => '13:30']);
+        app(SettingsService::class)->update(['online_discount_percent' => 25, 'check_in_time' => '13:30']);
 
         $this->getJson('/api/settings/public')
             ->assertOk()
@@ -97,647 +556,30 @@ class OnlinePaymentTest extends TestCase
             ->assertJsonPath('data.check_in_time', '13:30');
     }
 
-    // ------------------------------------------------------ starting (Stripe)
+    public function test_a_changed_discount_is_used_for_the_next_payment_only(): void
+    {
+        $guest = $this->makeUser('customer');
+        $first = $this->makeBooking($guest);
+        $this->payCard($guest, $first)->assertOk();
 
-    public function test_starting_opens_a_payment_page_for_the_discounted_price(): void
+        app(SettingsService::class)->update(['online_discount_percent' => 50]);
+
+        $second = $this->makeBooking($guest, ['in' => 20]);
+        $this->payCard($guest, $second)->assertOk()->assertJsonPath('data.amount_due', 15);
+
+        $this->assertEquals(25.5, $first->fresh()->amount_due); // the old booking keeps its discount
+    }
+
+    public function test_the_old_gateway_and_demo_routes_are_gone(): void
     {
         $guest = $this->makeUser('customer');
         $booking = $this->makeBooking($guest);
-
-        $response = $this->startOnline($guest, $booking)
-            ->assertOk()
-            ->assertJsonPath('mode', 'online')
-            ->assertJsonPath('data.payment_choice', 'online')
-            ->assertJsonPath('data.discount_percent', 15)
-            ->assertJsonPath('data.discount_amount', 4.5)
-            ->assertJsonPath('data.amount_due', 25.5)
-            ->assertJsonPath('data.total_price', 30);
-
-        $this->assertCount(1, $this->gateway->created);
-        $page = $this->gateway->created[0];
-        $this->assertSame(2550, $page['amount_cents']); // $25.50 in cents
-        $this->assertSame($booking->id, $page['booking_id']);
-        $this->assertSame($this->gateway->lastSessionId(), $booking->fresh()->checkout_session_id);
-        $this->assertStringContainsString('/payment/success?booking=' . $booking->id, $page['success_url']);
-        $this->assertStringContainsString('/payment/cancelled?booking=' . $booking->id, $page['cancel_url']);
-        $this->assertStringStartsWith('https://checkout.stripe.test/pay/', $response->json('checkout_url'));
-    }
-
-    public function test_the_discount_follows_the_admin_setting_and_rounds_to_cents(): void
-    {
-        $guest = $this->makeUser('customer');
-
-        $this->settings()->update(['online_discount_percent' => 20]);
-        $a = $this->makeBooking($guest, ['room' => Room::where('room_number', '101')->first()]);
-        $this->startOnline($guest, $a)->assertOk()->assertJsonPath('data.amount_due', 24);
-        $this->assertSame(2400, $this->gateway->created[0]['amount_cents']);
-
-        $this->settings()->update(['online_discount_percent' => 0]);
-        $b = $this->makeBooking($guest, ['room' => Room::where('room_number', '102')->first()]);
-        $this->startOnline($guest, $b)->assertOk()->assertJsonPath('data.discount_percent', 0)->assertJsonPath('data.amount_due', 30);
-        $this->assertSame(3000, $this->gateway->created[1]['amount_cents']);
-
-        // 1 night x $15 = $15. 15% off = $2.25, so $12.75.
-        $this->settings()->update(['online_discount_percent' => 15]);
-        $guest2 = $this->makeUser('customer');
-        $c = $this->makeBooking($guest2, ['room' => Room::where('room_number', '103')->first(), 'in' => 5, 'out' => 6]);
-        $this->startOnline($guest2, $c)->assertOk()
-            ->assertJsonPath('data.discount_amount', 2.25)
-            ->assertJsonPath('data.amount_due', 12.75);
-        $this->assertSame(1275, $this->gateway->created[2]['amount_cents']);
-    }
-
-    public function test_a_later_change_of_the_setting_does_not_change_a_started_payment(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe(); // started at 15%
-        $this->settings()->update(['online_discount_percent' => 40]);
-
-        $this->assertEquals(25.5, $booking->fresh()->amount_due);
-
-        // Stripe was asked for $25.50, so $25.50 is what the server expects, and it still works.
-        $this->verify($guest, $booking)->assertOk()->assertJsonPath('data.status', 'confirmed');
-    }
-
-    public function test_starting_gives_a_running_hold_more_time(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest); // 5 minutes
-
-        $response = $this->startOnline($guest, $booking)->assertOk();
-
-        $left = $response->json('data.hold_seconds_left');
-        $this->assertGreaterThan(890, $left);
-        $this->assertLessThanOrEqual(900, $left);
-    }
-
-    public function test_a_room_kept_for_the_hotel_stays_kept_when_the_guest_tries_online(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeKeptBooking($guest);
-
-        $this->startOnline($guest, $booking)->assertOk()->assertJsonPath('data.hold_seconds_left', null);
-
-        $this->assertNull($booking->fresh()->hold_expires_at);
-    }
-
-    public function test_starting_again_closes_the_first_page_and_uses_a_new_one(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $this->startOnline($guest, $booking)->assertOk();
-        $first = $this->gateway->lastSessionId();
-        $this->startOnline($guest, $booking)->assertOk();
-        $second = $this->gateway->lastSessionId();
-
-        $this->assertNotSame($first, $second);
-        $this->assertSame([$first], $this->gateway->expired);
-        $this->assertSame($second, $booking->fresh()->checkout_session_id);
-    }
-
-    // ----------------------------------------------------- starting: refusals
-
-    public function test_starting_needs_a_login_and_your_own_booking(): void
-    {
-        $booking = $this->makeBooking($this->makeUser('customer'));
-
-        $this->postJson("/api/bookings/{$booking->id}/pay-online")->assertUnauthorized();
-
-        $this->startOnline($this->makeUser('customer'), $booking)->assertNotFound();
-        $this->assertSame([], $this->gateway->created);
-    }
-
-    public function test_a_booking_that_is_not_pending_cannot_start_paying(): void
-    {
-        $guest = $this->makeUser('customer');
-
-        foreach (['confirmed', 'cancelled', 'checked_in', 'no_show'] as $i => $status) {
-            $booking = $this->makeBooking($guest, ['room' => Room::where('room_number', '10' . ($i + 1))->first(), 'status' => $status, 'hold' => null]);
-
-            $this->startOnline($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'not_pending');
-        }
-
-        $this->assertSame([], $this->gateway->created);
-    }
-
-    public function test_after_the_five_minutes_the_guest_cannot_start_paying_and_is_never_charged(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest, ['hold' => now()->subMinute()]);
-
-        $this->startOnline($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'hold_expired');
-
-        $this->assertSame([], $this->gateway->created);
-        $this->assertNull($booking->fresh()->payment_choice);
-    }
-
-    public function test_without_a_stripe_key_and_without_demo_mode_online_payment_is_unavailable(): void
-    {
-        $this->gateway->configured = false;
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $this->startOnline($guest, $booking)
-            ->assertStatus(503)
-            ->assertJsonPath('code', 'online_payment_unavailable');
-
-        $fresh = $booking->fresh();
-        $this->assertNull($fresh->payment_choice);
-        $this->assertSame(0, $fresh->discount_percent);
-        $this->assertSame([], $this->gateway->created);
-    }
-
-    public function test_when_stripe_fails_nothing_changes(): void
-    {
-        $this->gateway->failCreate = true;
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $holdBefore = $booking->hold_expires_at->toDateTimeString();
-
-        $this->startOnline($guest, $booking)->assertStatus(502)->assertJsonPath('code', 'provider_error');
-
-        $fresh = $booking->fresh();
-        $this->assertNull($fresh->payment_choice);
-        $this->assertSame(0, $fresh->discount_percent);
-        $this->assertNull($fresh->checkout_session_id);
-        $this->assertSame($holdBefore, $fresh->hold_expires_at->toDateTimeString());
-    }
-
-    public function test_an_amount_under_50_cents_is_refused_for_stripe(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $booking->forceFill(['total_price' => 0.40])->save();
-
-        $this->startOnline($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'amount_too_small');
-    }
-
-    // --------------------------------------------------- verifying the payment
-
-    public function test_the_server_confirms_the_booking_only_after_stripe_says_paid(): void
-    {
-        [$guest, $booking, $session] = $this->paidOnStripe();
-
-        $this->verify($guest, $booking)
-            ->assertOk()
-            ->assertJsonPath('data.status', 'confirmed')
-            ->assertJsonPath('data.paid', true)
-            ->assertJsonPath('data.payment_method', 'online')
-            ->assertJsonPath('data.amount_due', 25.5)
-            ->assertJsonPath('data.hold_seconds_left', null);
-
-        $payment = Payment::firstOrFail();
-        $this->assertSame($booking->id, $payment->booking_id);
-        $this->assertEquals(25.5, $payment->amount);
-        $this->assertSame('online', $payment->method);
-        $this->assertSame('paid', $payment->status);
-        $this->assertNull($payment->received_by); // no staff member took this money
-        $this->assertSame('pi_test_' . $session, $payment->reference);
-
-        $fresh = $booking->fresh();
-        $this->assertSame('confirmed', $fresh->status);
-        $this->assertNull($fresh->hold_expires_at);
-        $this->assertNull($fresh->checkout_session_id);
-    }
-
-    public function test_asking_twice_does_not_pay_twice(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-
-        $this->verify($guest, $booking)->assertOk();
-        $this->verify($guest, $booking)->assertOk()->assertJsonPath('data.status', 'confirmed');
-
-        $this->assertSame(1, Payment::count());
-    }
-
-    public function test_nothing_is_confirmed_while_the_guest_has_not_paid(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-
-        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'payment_not_completed');
-
-        $this->assertSame(0, Payment::count());
-        $this->assertSame('pending', $booking->fresh()->status);
-    }
-
-    public function test_a_payment_for_the_wrong_amount_is_not_accepted(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe(['amount_cents' => 100]); // $1 instead of $25.50
-
-        $this->verify($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'payment_mismatch');
-
-        $this->assertSame(0, Payment::count());
-        $this->assertSame('pending', $booking->fresh()->status);
-    }
-
-    public function test_a_payment_for_another_booking_is_not_accepted(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe(['booking_id' => 999999]);
-
-        $this->verify($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'payment_mismatch');
-
-        $this->assertSame(0, Payment::count());
-    }
-
-    public function test_a_payment_in_another_currency_is_not_accepted(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe(['currency' => 'khr']);
-
-        $this->verify($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'payment_mismatch');
-
-        $this->assertSame(0, Payment::count());
-    }
-
-    public function test_a_guest_cannot_use_someone_elses_paid_page_for_their_own_booking(): void
-    {
-        // Guest A pays for booking A. Guest B points booking B at A's page.
-        [, , $sessionA] = $this->paidOnStripe();
-        $guestB = $this->makeUser('customer');
-        $bookingB = $this->makeBooking($guestB, ['room' => Room::where('room_number', '102')->first()]);
-        $this->startOnline($guestB, $bookingB)->assertOk();
-        $bookingB->forceFill(['checkout_session_id' => $sessionA])->save();
-
-        $this->verify($guestB, $bookingB)->assertStatus(422)->assertJsonPath('code', 'payment_mismatch');
-
-        $this->assertSame('pending', $bookingB->fresh()->status);
-    }
-
-    public function test_verifying_without_a_started_payment_is_refused(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'no_payment_started');
-    }
-
-    public function test_verifying_needs_a_login_and_your_own_booking(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-
-        $this->verify($this->makeUser('customer'), $booking)->assertNotFound();
-
-        $this->app['auth']->forgetGuards(); // nobody is logged in any more
-        $this->postJson("/api/bookings/{$booking->id}/verify-payment")->assertUnauthorized();
-        $this->assertSame('pending', $booking->fresh()->status);
-    }
-
-    public function test_a_page_that_expired_unpaid_says_so(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-        $this->gateway->sessions[$this->gateway->lastSessionId()]['expired'] = true;
-
-        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'session_expired');
-    }
-
-    public function test_when_stripe_cannot_be_reached_the_booking_stays_pending(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-        $this->gateway->failRetrieve = true;
-
-        $this->verify($guest, $booking)->assertStatus(502)->assertJsonPath('code', 'provider_error');
-
-        $this->assertSame('pending', $booking->fresh()->status);
-        $this->assertSame(0, Payment::count());
-    }
-
-    // ------------------------------------------------------ paying too late
-
-    public function test_a_guest_who_pays_late_still_gets_the_room_if_it_is_still_free(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-        $this->travel(20)->minutes(); // the 15 minutes ran out
-
-        $this->verify($guest, $booking)->assertOk()->assertJsonPath('data.status', 'confirmed');
-
-        $this->assertSame(1, Payment::where('status', 'paid')->count());
-        $this->assertSame([], $this->gateway->refunds);
-    }
-
-    public function test_a_guest_who_pays_late_is_refunded_when_the_room_was_taken(): void
-    {
-        [$guest, $booking, $session] = $this->paidOnStripe();
-        $this->travel(20)->minutes();
-
-        // Someone else took the same room for the same nights.
-        $other = $this->makeBooking($this->makeUser('customer'), ['status' => 'confirmed', 'hold' => null]);
-
-        $this->verify($guest, $booking)
-            ->assertStatus(409)
-            ->assertJsonPath('code', 'room_gone_refunded')
-            ->assertJsonPath('data.status', 'cancelled');
-
-        $this->assertSame(['pi_test_' . $session], $this->gateway->refunds);
-        $this->assertSame(1, Payment::where('status', 'refunded')->count());
-        $this->assertSame(0, Payment::where('status', 'paid')->count());
-        $this->assertSame('cancelled', $booking->fresh()->status);
-        $this->assertSame('confirmed', $other->fresh()->status); // the other guest is untouched
-    }
-
-    public function test_a_guest_who_pays_late_is_refunded_when_the_room_is_in_maintenance(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-        $this->travel(20)->minutes();
-        Room::whereKey($booking->room_id)->update(['status' => Room::STATUS_MAINTENANCE]);
-
-        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'room_gone_refunded');
-
-        $this->assertCount(1, $this->gateway->refunds);
-    }
-
-    public function test_a_payment_for_a_booking_cancelled_in_the_meantime_is_refunded(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-        // Something else cancelled it (for example a night job) and left the payment page open.
-        $booking->forceFill(['status' => 'cancelled'])->save();
-
-        $this->verify($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'booking_cancelled_refunded');
-
-        $this->assertCount(1, $this->gateway->refunds);
-        $this->assertSame(1, Payment::where('status', 'refunded')->count());
-    }
-
-    public function test_when_a_needed_refund_fails_the_guest_is_told_to_call_the_hotel(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-        $this->travel(20)->minutes();
-        $this->makeBooking($this->makeUser('customer'), ['status' => 'confirmed', 'hold' => null]);
-        $this->gateway->failRefund = true;
-
-        $response = $this->verify($guest, $booking)->assertStatus(502)->assertJsonPath('code', 'refund_failed');
-
-        $this->assertStringContainsString($booking->code, $response->json('message'));
-        $this->assertSame(0, Payment::where('status', 'paid')->count());
-    }
-
-    // ----------------------------------------------------------- demo mode
-
-    public function test_demo_mode_opens_no_payment_page_even_with_a_stripe_key(): void
-    {
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $this->startOnline($guest, $booking)
-            ->assertOk()
-            ->assertJsonPath('mode', 'demo')
-            ->assertJsonPath('checkout_url', null)
-            ->assertJsonPath('data.amount_due', 25.5);
-
-        $this->assertSame([], $this->gateway->created);
-        $this->assertNull($booking->fresh()->checkout_session_id);
-    }
-
-    public function test_demo_mode_works_without_a_stripe_key(): void
-    {
-        $this->gateway->configured = false;
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $this->startOnline($guest, $booking)->assertOk()->assertJsonPath('mode', 'demo');
-    }
-
-    public function test_with_demo_mode_off_and_a_key_it_is_a_real_payment_page(): void
-    {
-        $this->demoMode(false);
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $this->startOnline($guest, $booking)->assertOk()->assertJsonPath('mode', 'online');
-    }
-
-    public function test_a_demo_payment_confirms_the_booking_with_the_discounted_amount(): void
-    {
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-
-        $this->demoPay($guest, $booking)
-            ->assertOk()
-            ->assertJsonPath('data.status', 'confirmed')
-            ->assertJsonPath('data.paid', true)
-            ->assertJsonPath('data.payment_method', 'online');
-
-        $payment = Payment::firstOrFail();
-        $this->assertEquals(25.5, $payment->amount);
-        $this->assertSame('online', $payment->method);
-        $this->assertNull($payment->received_by);
-        $this->assertStringStartsWith('demo-', $payment->reference);
-        $this->assertNull($booking->fresh()->hold_expires_at);
-    }
-
-    public function test_pressing_the_demo_button_twice_does_not_pay_twice(): void
-    {
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-
-        $this->demoPay($guest, $booking)->assertOk();
-        $this->demoPay($guest, $booking)->assertOk();
-
-        $this->assertSame(1, Payment::count());
-    }
-
-    public function test_the_demo_button_does_nothing_when_demo_mode_is_off(): void
-    {
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-
-        $this->demoMode(false); // the admin switches it off
-
-        $this->demoPay($guest, $booking)->assertStatus(403)->assertJsonPath('code', 'demo_mode_off');
-
-        $this->assertSame(0, Payment::count());
-        $this->assertSame('pending', $booking->fresh()->status);
-    }
-
-    public function test_a_guest_cannot_use_the_demo_button_in_normal_mode_to_skip_paying(): void
-    {
-        // Demo mode never was on: the endpoint must refuse, or anyone could book for free.
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-
-        $this->demoPay($guest, $booking)->assertStatus(403)->assertJsonPath('code', 'demo_mode_off');
-
-        $this->assertSame(0, Payment::count());
-    }
-
-    public function test_the_demo_button_needs_online_payment_to_be_chosen_first(): void
-    {
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $this->demoPay($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'no_payment_started');
-        $this->assertSame(0, Payment::count());
-    }
-
-    public function test_the_demo_button_is_refused_after_the_time_ran_out_or_for_other_guests(): void
-    {
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-
-        $this->demoPay($this->makeUser('customer'), $booking)->assertNotFound();
-
-        $this->app['auth']->forgetGuards(); // nobody is logged in any more
-        $this->postJson("/api/bookings/{$booking->id}/demo-pay")->assertUnauthorized();
-
-        $this->travel(20)->minutes();
-        $this->demoPay($guest, $booking)->assertStatus(409)->assertJsonPath('code', 'hold_expired');
-
-        $this->assertSame(0, Payment::count());
-    }
-
-    public function test_the_demo_button_is_refused_for_a_cancelled_booking(): void
-    {
-        $this->demoMode();
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-        $booking->forceFill(['status' => 'cancelled'])->save();
-
-        $this->demoPay($guest, $booking)->assertStatus(422)->assertJsonPath('code', 'not_pending');
-    }
-
-    // -------------------------------------------- changing your mind
-
-    public function test_choosing_the_hotel_after_starting_online_drops_the_discount_and_closes_the_page(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-        $session = $this->gateway->lastSessionId();
-
         Sanctum::actingAs($guest);
-        $this->postJson("/api/bookings/{$booking->id}/pay-at-hotel")
-            ->assertOk()
-            ->assertJsonPath('data.payment_choice', 'hotel')
-            ->assertJsonPath('data.discount_percent', 0)
-            ->assertJsonPath('data.amount_due', 30);
 
-        $fresh = $booking->fresh();
-        $this->assertNull($fresh->checkout_session_id);
-        $this->assertNull($fresh->hold_expires_at);
-        $this->assertSame([$session], $this->gateway->expired);
-    }
-
-    public function test_releasing_the_room_closes_the_payment_page(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-        $session = $this->gateway->lastSessionId();
-
-        Sanctum::actingAs($guest);
-        $this->postJson("/api/bookings/{$booking->id}/release")->assertOk();
-
-        $this->assertSame([$session], $this->gateway->expired);
-        $this->assertNull($booking->fresh()->checkout_session_id);
-        $this->assertSame('cancelled', $booking->fresh()->status);
-    }
-
-    public function test_if_the_guest_paid_at_the_very_moment_they_cancelled_the_money_goes_back(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-        $session = $this->gateway->lastSessionId();
-
-        // The page cannot be closed because it was just paid.
-        $this->gateway->pay($session);
-        $this->gateway->failExpire = true;
-
-        Sanctum::actingAs($guest);
-        $this->postJson("/api/bookings/{$booking->id}/release")->assertOk();
-
-        $this->assertSame(['pi_test_' . $session], $this->gateway->refunds);
-        $this->assertSame(1, Payment::where('status', 'refunded')->count());
-        $this->assertEquals(25.5, Payment::firstOrFail()->amount);
-        $this->assertSame('cancelled', $booking->fresh()->status);
-    }
-
-    public function test_staff_taking_payment_at_the_desk_closes_the_page_and_charges_the_full_price(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-        $session = $this->gateway->lastSessionId();
-
-        $staff = $this->makeUser('staff');
-        Sanctum::actingAs($staff);
-        $this->postJson("/api/staff/bookings/{$booking->id}/payments", ['method' => 'cash'])
-            ->assertCreated()
-            ->assertJsonPath('data.payments.0.amount', 30)
-            ->assertJsonPath('data.discount_percent', 0);
-
-        $this->assertSame([$session], $this->gateway->expired);
-        $fresh = $booking->fresh();
-        $this->assertNull($fresh->checkout_session_id);
-        $this->assertSame(0, $fresh->discount_percent);
-    }
-
-    // -------------------------------------------------------- what is shown
-
-    public function test_staff_see_an_online_payment_without_a_receiving_staff_member(): void
-    {
-        [$guest, $booking] = $this->paidOnStripe();
-        $this->verify($guest, $booking)->assertOk();
-
-        Sanctum::actingAs($this->makeUser('staff'));
-        $payment = $this->getJson("/api/staff/bookings/{$booking->id}")->assertOk()->json('data.payments.0');
-
-        $this->assertSame('online', $payment['method']);
-        $this->assertSame(25.5, $payment['amount']);
-        $this->assertNull($payment['received_by']);
-    }
-
-    public function test_the_payment_response_never_contains_a_secret_key(): void
-    {
-        config(['services.stripe.secret' => 'sk_test_do_not_leak_me']);
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-
-        $body = $this->startOnline($guest, $booking)->assertOk()->getContent();
-
-        $this->assertStringNotContainsString('sk_test_', $body);
-        $this->assertStringNotContainsString('do_not_leak_me', $body);
-    }
-
-    // ----------------------------------------------------- the return pages
-
-    public function test_the_return_pages_show_a_message_without_a_login(): void
-    {
-        $this->get('/payment/success?booking=1')
-            ->assertOk()
-            ->assertSee('Payment received')
-            ->assertSee('Angkor Stay app');
-
-        $this->get('/payment/cancelled?booking=1')
-            ->assertOk()
-            ->assertSee('Payment cancelled')
-            ->assertSee('Nothing was charged');
-    }
-
-    public function test_opening_the_success_page_by_hand_confirms_nothing(): void
-    {
-        $guest = $this->makeUser('customer');
-        $booking = $this->makeBooking($guest);
-        $this->startOnline($guest, $booking)->assertOk();
-
-        $this->get('/payment/success?booking=' . $booking->id)->assertOk();
-
-        $this->assertSame('pending', $booking->fresh()->status);
-        $this->assertSame(0, Payment::count());
+        $this->postJson("/api/bookings/{$booking->id}/pay-online")->assertNotFound();
+        $this->postJson("/api/bookings/{$booking->id}/demo-pay")->assertNotFound();
+        $this->get('/payment/success')->assertNotFound();
+        $this->assertFalse(Schema::hasColumn('bookings', 'checkout_session_id'));
+        $this->assertArrayNotHasKey('demo_payment_mode', app(SettingsService::class)->all());
     }
 }

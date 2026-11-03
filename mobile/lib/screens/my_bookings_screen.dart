@@ -158,7 +158,7 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
           if (b.hasDiscount) Text('Online discount: -${formatMoney(b.discountAmount)}'),
           Text('Total: ${formatMoney(b.toPay)}', style: Theme.of(context).textTheme.titleMedium),
           Text(b.paid
-              ? 'Paid${b.paymentMethod == null ? '' : ' (${methodLabel(b.paymentMethod!)})'}'
+              ? 'Paid${b.paymentMethod == null ? '' : ' (${b.paymentDetail ?? methodLabel(b.paymentMethod!)})'}'
               : b.refundedAmount > 0
                   ? 'Refunded ${formatMoney(b.refundedAmount)}'
                   : 'Not paid yet'),

@@ -4,13 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Booking;
 use App\Models\Payment;
-use App\Payments\PaymentGateway;
 use Database\Seeders\RoomSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\MakesBookings;
 use Tests\Concerns\MakesUsers;
-use Tests\Support\FakeGateway;
 use Tests\TestCase;
 
 /** Ticket 10: the automatic jobs. */
@@ -20,14 +18,11 @@ class CleanupJobsTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
-    private FakeGateway $gateway;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RoomSeeder::class);
-        $this->gateway = new FakeGateway();
-        $this->app->instance(PaymentGateway::class, $this->gateway);
     }
 
     private function paidOnline(Booking $b, string $ref = 'AS1-REAL'): Payment
@@ -78,26 +73,8 @@ class CleanupJobsTest extends TestCase
         $this->artisan('hotel:clean-up')->assertSuccessful();
 
         $this->assertSame('no_show', $b->fresh()->status);
-        $this->assertSame(['AS1-REAL'], $this->gateway->refunds);
+        $this->assertSame('refunded', Payment::firstOrFail()->status);
         $this->assertSame(Payment::STATUS_REFUNDED, $p->fresh()->status);
-    }
-
-    public function test_failed_refund_leaves_the_booking_for_the_next_run(): void
-    {
-        $g = $this->makeUser('customer');
-        $b = $this->makeBooking($g, ['in' => 0, 'out' => 2]);
-        $p = $this->paidOnline($b);
-        $this->gateway->failRefund = true;
-
-        $this->travelTo(now()->addDay()->setTime(13, 0));
-        $this->artisan('hotel:clean-up')->assertFailed();
-
-        $this->assertSame('confirmed', $b->fresh()->status);
-        $this->assertSame(Payment::STATUS_PAID, $p->fresh()->status);
-
-        $this->gateway->failRefund = false;
-        $this->artisan('hotel:clean-up')->assertSuccessful();
-        $this->assertSame('no_show', $b->fresh()->status);
     }
 
     public function test_checked_in_and_future_bookings_are_never_touched(): void
@@ -123,7 +100,7 @@ class CleanupJobsTest extends TestCase
         $this->artisan('hotel:clean-up');
         $this->artisan('hotel:clean-up');
 
-        $this->assertCount(1, $this->gateway->refunds);
+        $this->assertSame(1, Payment::where('status', Payment::STATUS_REFUNDED)->count());
     }
 
     public function test_a_freed_room_can_be_booked_again(): void

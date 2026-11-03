@@ -7,3 +7,9 @@
 Thumbs.db
 .idea/
 .vscode/
+
+# Local working notes: stays in the project folder, never goes to GitHub
+CLAUDE.md
+PROBLEM.md
+TODO.md
+DONE.md

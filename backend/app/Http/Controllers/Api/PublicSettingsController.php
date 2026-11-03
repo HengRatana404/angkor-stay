@@ -8,7 +8,7 @@ use Illuminate\Http\JsonResponse;
 
 /**
  * The few settings every guest may see (to show "save 15% online" and the
- * check-in time). Network rules, demo mode and the rest stay admin only.
+ * check-in time). Network rules and the rest stay admin only.
  */
 class PublicSettingsController extends Controller
 {
