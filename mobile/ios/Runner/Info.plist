@@ -66,5 +66,14 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Angkor Stay uses the camera to scan a guest's booking QR code at check-in and check-out.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Angkor Stay connects to the hotel server on the hotel Wi-Fi.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
