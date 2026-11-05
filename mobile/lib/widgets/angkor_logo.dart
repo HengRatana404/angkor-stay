@@ -24,7 +24,9 @@ class AngkorLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final emblem = useAsset
         ? Image.asset(
-            'assets/logo.png',
+            Theme.of(context).brightness == Brightness.dark
+                ? 'assets/logo_on_dark.png'
+                : 'assets/logo_on_light.png',
             width: size,
             height: size,
             fit: BoxFit.contain,

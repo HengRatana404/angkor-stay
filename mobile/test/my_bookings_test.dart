@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:angkor_stay/core/api_client.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:angkor_stay/widgets/notifications_sheet.dart';
 
 Booking _b({
   int id = 1,
@@ -213,6 +214,19 @@ void main() {
   testWidgets('a paid booking has no Pay now button', (tester) async {
     await _pump(tester, BookingDetailScreen(booking: _b()), _Repo([]));
     expect(find.byKey(const Key('pay-now')), findsNothing);
+  });
+
+  testWidgets('tapping a notification opens that booking', (tester) async {
+    await _pump(
+      tester,
+      const Scaffold(body: Center(child: NotificationBell())),
+      _Repo([_b()]),
+    );
+    await tester.tap(find.byType(NotificationBell));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Booking confirmed'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BookingDetailScreen), findsOneWidget);
   });
 
   group('deleting a finished booking', () {

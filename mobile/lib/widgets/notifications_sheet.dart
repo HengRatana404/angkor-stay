@@ -5,6 +5,7 @@ import '../booking/booking_repository.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../models/booking.dart';
+import '../screens/my_bookings_screen.dart';
 
 /// One message in the bell list.
 class AppNotification {
@@ -14,12 +15,19 @@ class AppNotification {
 
   /// True when the guest should do something (finish a booking, show the QR).
   final bool needsAction;
+
+  /// The booking this message is about; tapping the message opens it.
+  final Booking? booking;
   const AppNotification(
     this.icon,
     this.title,
     this.text, {
     this.needsAction = false,
+    this.booking,
   });
+
+  AppNotification forBooking(Booking b) =>
+      AppNotification(icon, title, text, needsAction: needsAction, booking: b);
 }
 
 /// Turns the guest's bookings into messages, newest stays first.
@@ -29,6 +37,7 @@ List<AppNotification> buildNotifications(List<Booking> bookings) {
   for (final b in list) {
     final dates =
         '${formatShortDate(b.checkIn)} → ${formatShortDate(b.checkOut)}';
+    final before = out.length;
     switch (b.status) {
       case 'pending':
         if (b.isKeptForHotel) {
@@ -96,6 +105,7 @@ List<AppNotification> buildNotifications(List<Booking> bookings) {
           ),
         );
     }
+    if (out.length > before) out[out.length - 1] = out.last.forBooking(b);
   }
   return out;
 }
@@ -115,10 +125,7 @@ class NotificationBell extends ConsumerWidget {
       icon: Stack(
         clipBehavior: Clip.none,
         children: [
-          const Icon(
-            Icons.notifications_none_rounded,
-            size: 26,
-          ),
+          const Icon(Icons.notifications_none_rounded, size: 26),
           if (needsAction)
             Positioned(
               right: 1,
@@ -253,50 +260,65 @@ class _NotificationTile extends StatelessWidget {
   final AppNotification n;
   const _NotificationTile(this.n);
 
+  /// Close the list, then open the booking this message is about.
+  void _open(BuildContext context, Booking b) {
+    final nav = Navigator.of(context);
+    nav.pop();
+    nav.push(
+      MaterialPageRoute<void>(builder: (_) => BookingDetailScreen(booking: b)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pal = context.pal;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: n.needsAction ? pal.goldWash : pal.surfaceAlt,
+    return Material(
+      color: n.needsAction ? pal.goldWash : pal.surfaceAlt,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: n.needsAction ? pal.goldSoft : pal.border),
+        side: BorderSide(color: n.needsAction ? pal.goldSoft : pal.border),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: pal.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(n.icon, size: 20, color: pal.goldDeep),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  n.title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: pal.text,
-                  ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: n.booking == null ? null : () => _open(context, n.booking!),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: pal.surface,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  n.text,
-                  style: TextStyle(color: pal.textMuted, height: 1.3),
+                child: Icon(n.icon, size: 20, color: pal.goldDeep),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      n.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: pal.text,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      n.text,
+                      style: TextStyle(color: pal.textMuted, height: 1.3),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
