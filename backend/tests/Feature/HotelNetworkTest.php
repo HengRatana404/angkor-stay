@@ -61,6 +61,57 @@ class HotelNetworkTest extends TestCase
         $this->login($customer->email, '2001:db8::1')->assertOk();
     }
 
+    // A tunnel program (ngrok, cloudflared) runs on this same PC: it connects from 127.0.0.1 and
+    // puts the real visitor in X-Forwarded-For. That is the only proxy the app believes.
+
+    public function test_staff_cannot_log_in_through_tunnel_from_the_internet(): void
+    {
+        $staff = $this->makeUser('staff');
+
+        $this->withHeaders(['X-Forwarded-For' => self::OUTSIDE])
+            ->login($staff->email, '127.0.0.1')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'outside_hotel_network');
+    }
+
+    public function test_staff_can_log_in_through_tunnel_when_the_real_visitor_is_on_the_hotel_network(): void
+    {
+        $staff = $this->makeUser('staff');
+
+        $this->withHeaders(['X-Forwarded-For' => '192.168.123.50'])
+            ->login($staff->email, '127.0.0.1')
+            ->assertOk();
+    }
+
+    public function test_customer_can_log_in_through_tunnel(): void
+    {
+        $customer = $this->makeUser('customer');
+
+        $this->withHeaders(['X-Forwarded-For' => self::OUTSIDE])
+            ->login($customer->email, '127.0.0.1')
+            ->assertOk();
+    }
+
+    public function test_a_header_sent_by_a_visitor_cannot_claim_a_hotel_address(): void
+    {
+        $staff = $this->makeUser('staff');
+
+        // Found by the code review: CF-Connecting-IP used to be believed from anyone.
+        $this->withHeaders(['CF-Connecting-IP' => '192.168.1.5'])
+            ->login($staff->email, self::OUTSIDE)
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'outside_hotel_network');
+    }
+
+    public function test_a_tunnel_host_name_alone_changes_nothing(): void
+    {
+        $staff = $this->makeUser('staff');
+
+        $this->withHeaders(['Host' => 'something.ngrok-free.dev'])
+            ->login($staff->email, self::OUTSIDE)
+            ->assertStatus(403);
+    }
+
     public function test_a_wrong_password_from_outside_says_wrong_password_not_wrong_network(): void
     {
         $staff = $this->makeUser('staff');

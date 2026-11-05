@@ -6,6 +6,7 @@ import '../../core/api_error.dart';
 import '../../models/staff_member.dart';
 import '../../widgets/error_banner.dart';
 import 'staff_form_screen.dart';
+import '../../widgets/angkor_app_bar.dart';
 
 class StaffListScreen extends ConsumerStatefulWidget {
   const StaffListScreen({super.key});
@@ -20,26 +21,33 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
   Future<void> _toggle(StaffMember member, bool active) async {
     setState(() => _busy.add(member.id));
     try {
-      await ref.read(adminRepositoryProvider).updateStaff(member.id, isActive: active);
+      await ref
+          .read(adminRepositoryProvider)
+          .updateStaff(member.id, isActive: active);
       ref.invalidate(staffListProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(active
-            ? '${member.name} can log in again.'
-            : '${member.name} is turned off and logged out.'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            active
+                ? '${member.name} can log in again.'
+                : '${member.name} is turned off and logged out.',
+          ),
+        ),
+      );
     } on ApiError catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _busy.remove(member.id));
     }
   }
 
   Future<void> _open({StaffMember? member}) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => StaffFormScreen(member: member)),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => StaffFormScreen(member: member)));
     ref.invalidate(staffListProvider);
   }
 
@@ -48,7 +56,7 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
     final staff = ref.watch(staffListProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Staff accounts')),
+      appBar: AngkorAppBar(title: 'Staff accounts'),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('add-staff'),
         onPressed: () => _open(),
@@ -99,15 +107,20 @@ class _StaffListScreenState extends ConsumerState<StaffListScreen> {
                 final m = list[i];
                 return ListTile(
                   key: Key('staff-${m.id}'),
-                  leading: CircleAvatar(child: Text(m.name.isEmpty ? '?' : m.name[0].toUpperCase())),
+                  leading: CircleAvatar(
+                    child: Text(m.name.isEmpty ? '?' : m.name[0].toUpperCase()),
+                  ),
                   title: Text(m.name),
-                  subtitle: Text('${m.email}\n${m.isActive ? 'Active' : 'Turned off'}'),
+                  subtitle: Text(
+                    '${m.email}\n${m.isActive ? 'Active' : 'Turned off'}',
+                  ),
                   isThreeLine: true,
                   onTap: () => _open(member: m),
                   trailing: Switch(
                     key: Key('switch-${m.id}'),
                     value: m.isActive,
-                    onChanged: _busy.contains(m.id) ? null : (v) => _toggle(m, v),
+                    onChanged:
+                        _busy.contains(m.id) ? null : (v) => _toggle(m, v),
                   ),
                 );
               },

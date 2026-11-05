@@ -40,7 +40,7 @@ class Booking extends Model
         'user_id', 'room_id', 'check_in_date', 'check_out_date', 'guests',
         'nights', 'price_per_night', 'total_price', 'status', 'payment_choice',
         'hold_expires_at', 'checked_in_at', 'checked_in_by', 'checked_out_at', 'checked_out_by',
-        'discount_percent', 'discount_amount',
+        'discount_percent', 'discount_amount', 'guest_deleted_at',
     ];
 
     protected function casts(): array
@@ -57,6 +57,7 @@ class Booking extends Model
             'hold_expires_at' => 'datetime',
             'checked_in_at' => 'datetime',
             'checked_out_at' => 'datetime',
+            'guest_deleted_at' => 'datetime',
         ];
     }
 
@@ -159,6 +160,17 @@ class Booking extends Model
     }
 
     /** Why this guest cannot check in now, or null when they can. */
+    /**
+     * After this moment a guest who has not arrived counts as a no-show: noon (the check-out time)
+     * on the day after check-in. The clean-up job marks the booking then, and staff can no longer check in.
+     */
+    public function noShowCutoff(): \Illuminate\Support\Carbon
+    {
+        $time = (string) app(\App\Services\SettingsService::class)->get('check_out_time'); // "12:00"
+
+        return \Illuminate\Support\Carbon::parse($this->check_in_date->toDateString() . ' ' . $time, config('app.timezone'))->addDay();
+    }
+
     public function checkInProblem(): ?string
     {
         switch ($this->status) {
@@ -169,6 +181,9 @@ class Booking extends Model
                 }
                 if ($today >= $this->check_out_date->toDateString()) {
                     return 'This stay is already over.';
+                }
+                if (now()->gte($this->noShowCutoff())) {
+                    return 'The arrival time has passed, so this booking counts as a no-show.';
                 }
 
                 return null;
@@ -192,6 +207,12 @@ class Booking extends Model
      * confirmed or checked in, or pending and still held
      * (the hold has not run out, or it is kept for pay-at-hotel).
      */
+    /** A guest's own bookings, without the ones they deleted from their account. */
+    public function scopeForGuest(Builder $query, int $userId): Builder
+    {
+        return $query->where('user_id', $userId)->whereNull('guest_deleted_at');
+    }
+
     public function scopeBlocking(Builder $query): Builder
     {
         return $query->where(function (Builder $q) {

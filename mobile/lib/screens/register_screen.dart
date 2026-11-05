@@ -5,6 +5,7 @@ import '../auth/auth_provider.dart';
 import '../core/api_error.dart';
 import '../widgets/error_banner.dart';
 import 'verify_email_screen.dart';
+import '../widgets/angkor_app_bar.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -56,7 +57,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           );
       if (!mounted) return;
       await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => VerifyEmailScreen(email: email)),
+        MaterialPageRoute<void>(builder: (_) => VerifyEmailScreen(email: email)),
       );
     } on ApiError catch (e) {
       if (!mounted) return;
@@ -73,7 +74,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
+      appBar: AngkorAppBar(title: 'Create account'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -82,7 +83,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+                if (_error != null) ...[
+                  ErrorBanner(_error!),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: _name,
                   textCapitalization: TextCapitalization.words,
@@ -107,7 +111,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     helperText: 'We send a 6-digit code to this email',
                   ),
                   validator: (v) {
-                    if (v == null || !v.contains('@')) return 'Enter a valid email';
+                    if (v == null || !v.contains('@')) {
+                      return 'Enter a valid email';
+                    }
                     return _server('email');
                   },
                 ),
@@ -121,7 +127,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     prefixIcon: Icon(Icons.phone_outlined),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().length < 8) return 'Enter your phone number';
+                    if (v == null || v.trim().length < 8) {
+                      return 'Enter your phone number';
+                    }
                     return _server('phone');
                   },
                 ),
@@ -135,12 +143,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     helperText: 'At least 8 characters',
                     suffixIcon: IconButton(
-                      icon: Icon(_hidePassword ? Icons.visibility : Icons.visibility_off),
-                      onPressed: () => setState(() => _hidePassword = !_hidePassword),
+                      tooltip:
+                          _hidePassword ? 'Show password' : 'Hide password',
+                      icon: Icon(
+                        _hidePassword ? Icons.visibility : Icons.visibility_off,
+                      ),
+                      onPressed: () =>
+                          setState(() => _hidePassword = !_hidePassword),
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.length < 8) return 'At least 8 characters';
+                    if (v == null || v.length < 8) {
+                      return 'At least 8 characters';
+                    }
                     return _server('password');
                   },
                 ),
@@ -164,7 +179,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Register'),
                 ),

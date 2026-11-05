@@ -63,6 +63,24 @@ class CleanupJobsTest extends TestCase
         $this->assertSame('no_show', $b->fresh()->status);
     }
 
+    public function test_a_late_guest_cannot_be_checked_in_once_the_clean_up_would_call_it_a_no_show(): void
+    {
+        // One rule for both: noon the day after check-in (found by the code review: the desk
+        // used to allow check-in until the last day while the clean-up refunded and cancelled).
+        $g = $this->makeUser('customer');
+        $b = $this->makeBooking($g, ['in' => 0, 'out' => 3]);
+        $b->update(['status' => Booking::STATUS_CONFIRMED, 'hold_expires_at' => null]);
+
+        $this->travelTo(now()->addDay()->setTime(11, 59));
+        $this->assertNull($b->fresh()->checkInProblem());
+
+        $this->travelTo(now()->setTime(12, 0));
+        $this->assertStringContainsString('no-show', (string) $b->fresh()->checkInProblem());
+
+        $this->artisan('hotel:clean-up');
+        $this->assertSame('no_show', $b->fresh()->status);
+    }
+
     public function test_no_show_refunds_online_money_in_full(): void
     {
         $g = $this->makeUser('customer');

@@ -5,6 +5,7 @@ import '../../admin/admin_repository.dart';
 import '../../core/api_error.dart';
 import '../../models/hotel_settings.dart';
 import '../../widgets/error_banner.dart';
+import '../../widgets/angkor_app_bar.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -14,7 +15,7 @@ class SettingsScreen extends ConsumerWidget {
     final result = ref.watch(hotelSettingsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Hotel settings')),
+      appBar: AngkorAppBar(title: 'Hotel settings'),
       body: result.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => ListView(
@@ -46,10 +47,12 @@ class SettingsForm extends ConsumerStatefulWidget {
 
 class _SettingsFormState extends ConsumerState<SettingsForm> {
   final _formKey = GlobalKey<FormState>();
-  late final _discount =
-      TextEditingController(text: '${widget.initial.onlineDiscountPercent}');
-  late final _networks =
-      TextEditingController(text: widget.initial.allowedNetworks.join('\n'));
+  late final _discount = TextEditingController(
+    text: '${widget.initial.onlineDiscountPercent}',
+  );
+  late final _networks = TextEditingController(
+    text: widget.initial.allowedNetworks.join('\n'),
+  );
   late String _checkIn = widget.initial.checkInTime;
   late String _checkOut = widget.initial.checkOutTime;
   late bool _restricted = widget.initial.staffLoginRestricted;
@@ -85,7 +88,10 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
     final current = (checkIn ? _checkIn : _checkOut).split(':');
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: int.parse(current[0]), minute: int.parse(current[1])),
+      initialTime: TimeOfDay(
+        hour: int.parse(current[0]),
+        minute: int.parse(current[1]),
+      ),
       helpText: checkIn ? 'Check-in time' : 'Check-out time',
     );
     if (picked == null) return;
@@ -122,7 +128,8 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
       await ref.read(adminRepositoryProvider).saveSettings(settings);
       ref.invalidate(hotelSettingsProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Settings saved.')));
     } on ApiError catch (e) {
       if (!mounted) return;
       setState(() {
@@ -144,8 +151,10 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
-
+          if (_error != null) ...[
+            ErrorBanner(_error!),
+            const SizedBox(height: 16),
+          ],
           Text('Online payment', style: theme.textTheme.titleMedium),
           const SizedBox(height: 12),
           TextFormField(
@@ -160,11 +169,12 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
             ),
             validator: (v) {
               final n = int.tryParse((v ?? '').trim());
-              if (n == null || n < 0 || n > 50) return 'Enter a whole number from 0 to 50';
+              if (n == null || n < 0 || n > 50) {
+                return 'Enter a whole number from 0 to 50';
+              }
               return _server('online_discount_percent');
             },
           ),
-
           const Divider(height: 32),
           Text('Times', style: theme.textTheme.titleMedium),
           ListTile(
@@ -183,14 +193,15 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
             trailing: Text(_checkOut, style: theme.textTheme.titleMedium),
             onTap: () => _pickTime(checkIn: false),
           ),
-
           const Divider(height: 32),
           Text('Staff and admin network', style: theme.textTheme.titleMedium),
           SwitchListTile(
             key: const Key('restricted'),
             contentPadding: EdgeInsets.zero,
             title: const Text('Only on the hotel network'),
-            subtitle: const Text('Staff and admin cannot log in or work outside it. Customers are not affected.'),
+            subtitle: const Text(
+              'Staff and admin cannot log in or work outside it. Customers are not affected.',
+            ),
             value: _restricted,
             onChanged: (v) => setState(() => _restricted = v),
           ),
@@ -214,16 +225,20 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
               },
             ),
             const SizedBox(height: 8),
-            Text('This device connects from ${widget.yourIp}', key: const Key('your-ip')),
+            Text(
+              'This device connects from ${widget.yourIp}',
+              key: const Key('your-ip'),
+            ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               key: const Key('add-this-device'),
               onPressed: widget.yourIp.isEmpty ? null : _addThisDevice,
               icon: const Icon(Icons.wifi),
-              label: Text("Add this device's network (${networkForIp(widget.yourIp)})"),
+              label: Text(
+                "Add this device's network (${networkForIp(widget.yourIp)})",
+              ),
             ),
           ],
-
           const SizedBox(height: 24),
           FilledButton(
             key: const Key('settings-save'),
@@ -232,7 +247,10 @@ class _SettingsFormState extends ConsumerState<SettingsForm> {
                 ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Text('Save settings'),
           ),

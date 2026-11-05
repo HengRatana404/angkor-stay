@@ -5,19 +5,22 @@ import '../auth/auth_provider.dart';
 import '../core/api_error.dart';
 import '../widgets/error_banner.dart';
 import 'reset_code_screen.dart';
+import '../widgets/angkor_app_bar.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   final String initialEmail;
   const ForgotPasswordScreen({super.key, this.initialEmail = ''});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _email =
-      TextEditingController(text: widget.initialEmail);
+  late final TextEditingController _email = TextEditingController(
+    text: widget.initialEmail,
+  );
   bool _busy = false;
   String? _error;
 
@@ -38,9 +41,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     try {
       await ref.read(authProvider.notifier).forgotPassword(email);
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ResetCodeScreen(email: email)),
-      );
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => ResetCodeScreen(email: email)));
     } on ApiError catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -51,7 +54,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Forgot password')),
+      appBar: AngkorAppBar(title: 'Forgot password'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -66,8 +69,17 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   'Enter your email. We will send you a 6-digit code.',
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Staff and admin: ask the admin to set a new password for you.',
+                  textAlign: TextAlign.center,
+                  key: Key('forgot-staff-note'),
+                ),
                 const SizedBox(height: 24),
-                if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+                if (_error != null) ...[
+                  ErrorBanner(_error!),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
@@ -76,8 +88,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
-                  validator: (v) =>
-                      (v == null || !v.contains('@')) ? 'Enter your email' : null,
+                  validator: (v) => (v == null || !v.contains('@'))
+                      ? 'Enter your email'
+                      : null,
                   onFieldSubmitted: (_) => _submit(),
                 ),
                 const SizedBox(height: 24),
@@ -87,7 +100,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Send code'),
                 ),

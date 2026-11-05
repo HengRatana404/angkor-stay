@@ -97,7 +97,7 @@ cd mobile  && flutter analyze           # no issues
 
 ## Postman
 
-Import `postman/angkor-stay.postman_collection.json` and `postman/angkor-stay.postman_environment.json`, fill in the accounts in the environment, and run folders 0 to 7 in order. Details and screenshots: [postman/README.md](postman/README.md).
+Import `postman/angkor-stay.postman_collection.json` (no environment needed: every request has the full address), type the account emails and passwords in the collection's Variables tab, and run folders 0 to 7 in order. Details and screenshots: [postman/README.md](postman/README.md).
 
 ## Slides and diagram
 

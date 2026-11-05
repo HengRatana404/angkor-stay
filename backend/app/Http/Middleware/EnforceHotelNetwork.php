@@ -22,9 +22,8 @@ class EnforceHotelNetwork
     {
         $user = $request->user();
 
-        // $request->ip() is the address of the connection itself. Headers such
-        // as X-Forwarded-For are ignored, so they cannot be used to cheat.
-        if ($user && ! $this->settings->mayConnectFrom($user, $request->ip())) {
+        // Effective IP checks real client address even behind cloud tunnels.
+        if ($user && ! $this->settings->mayConnectFrom($user, $this->settings->effectiveIp($request))) {
             return response()->json([
                 'message' => 'Staff and admin can only use the app on the hotel network.',
                 'code' => 'outside_hotel_network',

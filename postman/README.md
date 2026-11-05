@@ -4,26 +4,26 @@
 
 Files:
 
-- `angkor-stay.postman_collection.json` : the requests (with tests).
-- `angkor-stay.postman_environment.json` : the variables. Passwords are **empty on purpose**. Fill them in on your own PC.
+- `angkor-stay.postman_collection.json` : the requests (with tests). This is the only file you need.
+
+Every request already has its full address, for example `http://127.0.0.1:8000/api/room-types`, like a plain Postman request. **No environment is needed.**
 
 ## Import on another PC
 
-1. Open Postman. Click **Import**. Drop both JSON files in.
-2. Top right, choose the environment **Angkor Stay (local)**.
-3. Click the eye icon, then **Edit**, and fill in:
-   - `base_url`: `http://127.0.0.1:8000/api` (the Laravel API from `php artisan serve --port=8000`)
+1. Start PostgreSQL and the API (`php artisan serve --host=0.0.0.0 --port=8000` in `backend`).
+2. Open Postman. Click **Import** and drop in the collection file.
+3. Click the collection name, open the **Variables** tab, and type these in the **Current value** column (they stay on your PC):
    - `customer_email` / `customer_password`: any verified guest account
    - `staff_email` / `staff_password`: the staff account (see `backend/.env` `SEED_*`)
    - `admin_email` / `admin_password`: the admin account
-   - Leave the three `*_token` values empty. Folder 1 fills them in.
+   - Leave the three `*_token` values empty. Folder 1 fills them in. Press **Save**.
 4. Staff and admin can only log in from the hotel network. On the same PC as the API this is `127.0.0.1`, which is allowed by default. If you are locked out, run `php artisan hotel:network off`.
 
 ## How to run
 
 **One request:** open it and press **Send**. Every request has tests. A green "Test Results" tab means the answer was what we expect.
 
-**Everything:** right click the collection, **Run collection**. Choose the environment. Run folders **0 to 7**, in order. **Un-tick folder 8.**
+**Everything:** right click the collection, **Run collection**. Run folders **0 to 7**, in order. **Un-tick folder 8.**
 
 Folder 1 logs in and saves the tokens, so it must run first. Later folders save ids such as `booking_a` for the folders after them.
 

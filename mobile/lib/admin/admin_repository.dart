@@ -44,7 +44,7 @@ class AdminRepository {
   }
 
   Future<List<StaffMember>> staff() => _call(() async {
-        final res = await dio.get('/admin/staff');
+        final res = await dio.get<dynamic>('/admin/staff');
         return (res.data['data'] as List)
             .map((e) => StaffMember.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -57,7 +57,7 @@ class AdminRepository {
     required String password,
   }) =>
       _call(() async {
-        final res = await dio.post('/admin/staff', data: {
+        final res = await dio.post<dynamic>('/admin/staff', data: {
           'name': name,
           'email': email,
           'phone': phone,
@@ -75,7 +75,7 @@ class AdminRepository {
     String? password,
   }) =>
       _call(() async {
-        final res = await dio.patch('/admin/staff/$id', data: {
+        final res = await dio.patch<dynamic>('/admin/staff/$id', data: {
           'name': ?name,
           'phone': ?phone,
           'is_active': ?isActive,
@@ -86,7 +86,7 @@ class AdminRepository {
 
   /// Runs the automatic jobs now: tidy old holds, mark no-shows and refund them.
   Future<CleanupResult> runCleanup() => _call(() async {
-        final res = await dio.post('/admin/maintenance/run');
+        final res = await dio.post<dynamic>('/admin/maintenance/run');
         final d = res.data['data'] as Map<String, dynamic>;
         return CleanupResult(
           expiredHolds: d['expired_holds'] as int,
@@ -97,14 +97,14 @@ class AdminRepository {
       });
 
   Future<Dashboard> dashboard() => _call(() async {
-        final res = await dio.get('/admin/dashboard');
+        final res = await dio.get<dynamic>('/admin/dashboard');
         return Dashboard.fromJson(res.data['data'] as Map<String, dynamic>);
       });
 
   // ----------------------------------------------------- room types and rooms
 
   Future<List<AdminRoomType>> roomTypes() => _call(() async {
-        final res = await dio.get('/admin/room-types');
+        final res = await dio.get<dynamic>('/admin/room-types');
         return (res.data['data'] as List)
             .map((e) => AdminRoomType.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -128,37 +128,37 @@ class AdminRepository {
           'images': images,
         };
         final res = id == null
-            ? await dio.post('/admin/room-types', data: body)
-            : await dio.patch('/admin/room-types/$id', data: body);
+            ? await dio.post<dynamic>('/admin/room-types', data: body)
+            : await dio.patch<dynamic>('/admin/room-types/$id', data: body);
         return AdminRoomType.fromJson(res.data['data'] as Map<String, dynamic>);
       });
 
   Future<void> deleteRoomType(int id) => _call(() async {
-        await dio.delete('/admin/room-types/$id');
+        await dio.delete<dynamic>('/admin/room-types/$id');
       });
 
   Future<void> addRoom({required int roomTypeId, required String roomNumber, required int floor}) =>
       _call(() async {
-        await dio.post('/admin/rooms',
+        await dio.post<dynamic>('/admin/rooms',
             data: {'room_type_id': roomTypeId, 'room_number': roomNumber, 'floor': floor});
       });
 
   Future<void> setRoomStatus(int roomId, {required bool maintenance}) => _call(() async {
-        await dio.patch('/admin/rooms/$roomId',
+        await dio.patch<dynamic>('/admin/rooms/$roomId',
             data: {'status': maintenance ? 'maintenance' : 'available'});
       });
 
   Future<void> deleteRoom(int roomId) => _call(() async {
-        await dio.delete('/admin/rooms/$roomId');
+        await dio.delete<dynamic>('/admin/rooms/$roomId');
       });
 
   Future<SettingsResult> settings() => _call(() async {
-        final res = await dio.get('/admin/settings');
+        final res = await dio.get<dynamic>('/admin/settings');
         return _settingsResult(res.data as Map<String, dynamic>);
       });
 
   Future<SettingsResult> saveSettings(HotelSettings settings) => _call(() async {
-        final res = await dio.put('/admin/settings', data: settings.toJson());
+        final res = await dio.put<dynamic>('/admin/settings', data: settings.toJson());
         return _settingsResult(res.data as Map<String, dynamic>);
       });
 

@@ -4,10 +4,12 @@ import 'package:angkor_stay/core/api_client.dart';
 import 'package:angkor_stay/core/api_error.dart';
 import 'package:angkor_stay/main.dart';
 import 'package:angkor_stay/models/app_user.dart';
+import 'package:angkor_stay/models/dashboard.dart';
 import 'package:angkor_stay/models/hotel_settings.dart';
 import 'package:angkor_stay/models/staff_member.dart';
 import 'package:angkor_stay/screens/admin/settings_screen.dart';
 import 'package:angkor_stay/screens/admin/staff_list_screen.dart';
+import 'package:angkor_stay/screens/profile_screen.dart';
 import 'package:angkor_stay/screens/staff_home_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -59,6 +61,28 @@ class _FakeAdmin extends AdminRepository {
   Future<CleanupResult> runCleanup() async {
     cleanupRuns++;
     return const CleanupResult(expiredHolds: 2, noShows: 1, refunded: 21.25, failed: 0);
+  }
+
+  @override
+  Future<Dashboard> dashboard() async {
+    return const Dashboard(
+      checkIns: 3,
+      checkedInSoFar: 1,
+      checkOuts: 2,
+      checkedOutSoFar: 2,
+      roomsTotal: 15,
+      roomsOccupied: 4,
+      roomsFree: 10,
+      roomsMaintenance: 1,
+      moneyToday: 55.5,
+      moneyMonth: 410.25,
+      moneyMonthOnline: 250.25,
+      moneyMonthHotel: 160.0,
+      moneyMonthRefunded: 21.25,
+      pendingCount: 0,
+      pending: [],
+      days: [],
+    );
   }
 
   @override
@@ -151,9 +175,12 @@ Future<Widget> _appAs(AppUser user, _FakeAdmin admin) async => ProviderScope(
     );
 
 /// One screen on its own.
-Future<Widget> _screen(Widget screen, _FakeAdmin admin) async => ProviderScope(
+Future<Widget> _screen(Widget screen, _FakeAdmin admin, [AppUser? user]) async => ProviderScope(
       retry: (retryCount, error) => null,
-      overrides: await _baseOverrides(admin),
+      overrides: [
+        ...await _baseOverrides(admin),
+        if (user != null) authProvider.overrideWith(() => _FakeAuth(user)),
+      ],
       child: MaterialApp(home: screen),
     );
 
@@ -171,10 +198,13 @@ void main() {
 
       expect(find.byType(StaffHomeScreen), findsOneWidget);
       expect(find.text('Hello, Hotel Admin'), findsOneWidget);
-      expect(find.text('ADMIN'), findsOneWidget);
+      expect(find.text('Admin'), findsOneWidget); // the role label
       expect(find.byKey(const Key('tile-staff')), findsOneWidget);
       expect(find.byKey(const Key('tile-settings')), findsOneWidget);
       expect(find.text('Our rooms'), findsNothing);
+      expect(find.byKey(const Key('staff-home-scan-fab')), findsNothing);
+      expect(find.text('Scan Guest QR'), findsNothing);
+      expect(find.text('Front desk'), findsNothing);
     });
 
     testWidgets('staff do not get the admin tiles', (tester) async {
@@ -183,12 +213,44 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(StaffHomeScreen), findsOneWidget);
-      expect(find.text('STAFF'), findsOneWidget);
+      expect(find.text('Staff'), findsOneWidget);
       expect(find.byKey(const Key('tile-staff')), findsNothing);
       expect(find.byKey(const Key('tile-settings')), findsNothing);
       expect(find.byKey(const Key('tile-cleanup')), findsNothing);
       expect(find.text('Staff accounts'), findsNothing);
       expect(find.text('Hotel settings'), findsNothing);
+      expect(find.byKey(const Key('staff-home-scan-fab')), findsOneWidget);
+      expect(find.text('Scan guest QR'), findsOneWidget);
+      expect(find.text('Front desk'), findsOneWidget);
+    });
+
+    testWidgets('staff open their profile: no name or phone to edit, only the password', (tester) async {
+      _tallScreen(tester);
+      await tester.pumpWidget(await _appAs(_staff, _FakeAdmin()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('My profile'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ProfileScreen), findsOneWidget);
+      expect(find.byKey(const Key('staff-name')), findsOneWidget);
+      expect(find.text('Name'), findsNothing);
+      expect(find.text('Phone'), findsNothing);
+      expect(find.text('Save profile'), findsNothing);
+      expect(find.text('Current password'), findsOneWidget);
+      expect(find.byKey(const Key('staff-forgot-note')), findsOneWidget);
+    });
+
+    testWidgets('a guest still edits name and phone in the profile', (tester) async {
+      _tallScreen(tester);
+      const guest = AppUser(id: 9, name: 'Sok Dara', email: 'dara@example.com', phone: '012345678', role: 'customer');
+      await tester.pumpWidget(await _screen(const ProfileScreen(), _FakeAdmin(), guest));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Name'), findsOneWidget);
+      expect(find.text('Phone'), findsOneWidget);
+      expect(find.text('Save profile'), findsOneWidget);
+      expect(find.byKey(const Key('staff-forgot-note')), findsNothing);
     });
 
     testWidgets('the admin can run the clean-up and sees what it did', (tester) async {
@@ -198,6 +260,17 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('tile-cleanup')));
+      await tester.pumpAndSettle();
+
+      // It asks first. "Not now" runs nothing.
+      expect(find.text('Release unpaid holds?'), findsOneWidget);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      expect(fake.cleanupRuns, 0);
+
+      await tester.tap(find.byKey(const Key('tile-cleanup')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-cleanup')));
       await tester.pumpAndSettle();
 
       expect(fake.cleanupRuns, 1);

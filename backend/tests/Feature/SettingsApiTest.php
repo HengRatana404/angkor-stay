@@ -215,7 +215,10 @@ class SettingsApiTest extends TestCase
     {
         $this->asAdmin();
 
-        $this->withHeaders(['X-Forwarded-For' => '192.168.77.20'])
+        // A device on the hotel Wi-Fi (not the tunnel program on this PC) sends a made-up header:
+        // it is ignored, so the guard still sees the device's real address and refuses to lock it out.
+        $this->fromIp('192.168.123.9')
+            ->withHeaders(['X-Forwarded-For' => '192.168.77.20'])
             ->putJson('/api/admin/settings', $this->valid(['allowed_networks' => ['192.168.77.0/24']]))
             ->assertStatus(422);
     }

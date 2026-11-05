@@ -8,6 +8,7 @@ import '../auth/auth_provider.dart';
 import '../core/api_error.dart';
 import '../widgets/error_banner.dart';
 import 'new_password_screen.dart';
+import '../widgets/angkor_app_bar.dart';
 
 class ResetCodeScreen extends ConsumerStatefulWidget {
   final String email;
@@ -68,7 +69,7 @@ class _ResetCodeScreenState extends ConsumerState<ResetCodeScreen> {
           .checkResetCode(email: widget.email, code: code);
       if (!mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute(
+        MaterialPageRoute<void>(
           builder: (_) => NewPasswordScreen(email: widget.email, code: code),
         ),
       );
@@ -97,7 +98,7 @@ class _ResetCodeScreenState extends ConsumerState<ResetCodeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Enter the code')),
+      appBar: AngkorAppBar(title: 'Enter the code'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -112,7 +113,10 @@ class _ResetCodeScreenState extends ConsumerState<ResetCodeScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 24),
-              if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+              if (_error != null) ...[
+                ErrorBanner(_error!),
+                const SizedBox(height: 16),
+              ],
               if (_info != null) ...[
                 Text(_info!, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
@@ -138,14 +142,21 @@ class _ResetCodeScreenState extends ConsumerState<ResetCodeScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Text('Verify code'),
               ),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: _wait > 0 || _busy ? null : _resend,
-                child: Text(_wait > 0 ? 'Send a new code in ${_wait}s' : 'Send a new code'),
+                child: Text(
+                  _wait > 0
+                      ? 'Send a new code in ${_wait}s'
+                      : 'Send a new code',
+                ),
               ),
             ],
           ),

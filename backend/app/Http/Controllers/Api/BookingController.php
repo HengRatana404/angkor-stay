@@ -97,7 +97,7 @@ class BookingController extends Controller
     /** The guest's own bookings, newest first. A hold that already ran out never kept anything, so it is left out. */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $bookings = Booking::where('user_id', $request->user()->id)
+        $bookings = Booking::forGuest($request->user()->id)
             ->visibleToStaff()
             ->with('room.roomType.images')
             ->orderByDesc('id')
@@ -117,7 +117,7 @@ class BookingController extends Controller
     {
         try {
             $booking = DB::transaction(function () use ($request, $id) {
-                $booking = Booking::where('user_id', $request->user()->id)->lockForUpdate()->findOrFail($id);
+                $booking = Booking::forGuest($request->user()->id)->lockForUpdate()->findOrFail($id);
 
                 if (! in_array($booking->status, [Booking::STATUS_PENDING, Booking::STATUS_CONFIRMED], true)) {
                     throw new PaymentException('This booking can no longer be cancelled.', 'cannot_cancel', 422);
@@ -157,7 +157,7 @@ class BookingController extends Controller
     public function payAtHotel(Request $request, int $id): BookingResource|JsonResponse
     {
         return DB::transaction(function () use ($request, $id) {
-            $booking = Booking::where('user_id', $request->user()->id)->lockForUpdate()->findOrFail($id);
+            $booking = Booking::forGuest($request->user()->id)->lockForUpdate()->findOrFail($id);
 
             if ($booking->status !== Booking::STATUS_PENDING || $booking->isPaid()) {
                 return response()->json([
@@ -207,23 +207,50 @@ class BookingController extends Controller
     /** Let go of a room that is still waiting for payment. */
     public function release(Request $request, int $id): JsonResponse
     {
-        $booking = $this->ownBooking($request, $id);
+        // Locked like cancel(): a payment that lands at the same moment cannot be overwritten.
+        return DB::transaction(function () use ($request, $id) {
+            $booking = Booking::forGuest($request->user()->id)->lockForUpdate()->findOrFail($id);
 
-        if ($booking->status !== Booking::STATUS_PENDING) {
-            return response()->json(['message' => 'This booking can no longer be released.'], 422);
-        }
+            if ($booking->status !== Booking::STATUS_PENDING) {
+                return response()->json(['message' => 'This booking can no longer be released.'], 422);
+            }
 
-        // A payment page that is still open must not be payable after this.
-        $this->online->abandon($booking);
+            // A payment page that is still open must not be payable after this.
+            $this->online->abandon($booking);
 
-        $booking->update(['status' => Booking::STATUS_CANCELLED, 'hold_expires_at' => null]);
+            $booking->update(['status' => Booking::STATUS_CANCELLED, 'hold_expires_at' => null]);
 
-        return response()->json(['message' => 'The room was released.']);
+            return response()->json(['message' => 'The room was released.']);
+        });
+    }
+
+    /**
+     * The guest deletes a FINISHED booking from their account for good. The hotel keeps its own
+     * record (staff, admin, payments), so no money history is lost. A running booking must be
+     * cancelled first.
+     */
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        return DB::transaction(function () use ($request, $id) {
+            $booking = Booking::forGuest($request->user()->id)->lockForUpdate()->findOrFail($id);
+
+            $finished = [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW, Booking::STATUS_CHECKED_OUT];
+            if (! in_array($booking->status, $finished, true)) {
+                return response()->json([
+                    'message' => 'Only a finished booking can be deleted. Cancel it first.',
+                    'code' => 'cannot_delete',
+                ], 422);
+            }
+
+            $booking->update(['guest_deleted_at' => now()]);
+
+            return response()->json(['message' => 'The booking was deleted.']);
+        });
     }
 
     /** A customer sees only their own bookings; anything else looks like it does not exist. */
     private function ownBooking(Request $request, int $id): Booking
     {
-        return Booking::where('user_id', $request->user()->id)->findOrFail($id);
+        return Booking::forGuest($request->user()->id)->findOrFail($id);
     }
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/auth_provider.dart';
 import '../core/api_error.dart';
 import '../widgets/error_banner.dart';
+import '../widgets/angkor_app_bar.dart';
 
 class NewPasswordScreen extends ConsumerStatefulWidget {
   final String email;
@@ -67,7 +68,7 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New password')),
+      appBar: AngkorAppBar(title: 'New password'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -81,7 +82,10 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+                if (_error != null) ...[
+                  ErrorBanner(_error!),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: _password,
                   obscureText: _hide,
@@ -91,12 +95,17 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     helperText: 'At least 8 characters',
                     suffixIcon: IconButton(
-                      icon: Icon(_hide ? Icons.visibility : Icons.visibility_off),
+                      tooltip: _hide ? 'Show password' : 'Hide password',
+                      icon: Icon(
+                        _hide ? Icons.visibility : Icons.visibility_off,
+                      ),
                       onPressed: () => setState(() => _hide = !_hide),
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.length < 8) return 'At least 8 characters';
+                    if (v == null || v.length < 8) {
+                      return 'At least 8 characters';
+                    }
                     return _passwordError;
                   },
                 ),
@@ -120,7 +129,10 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Change password'),
                 ),

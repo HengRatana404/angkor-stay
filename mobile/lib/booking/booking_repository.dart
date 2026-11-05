@@ -45,19 +45,25 @@ class BookingRepository {
 
   /// Asks the server for a room. The room is checked first and held for
   /// 5 minutes. Nothing is paid here.
-  Future<Booking> create({required int roomTypeId, required Stay stay}) => _call(() async {
-        final res = await dio.post('/bookings', data: {
-          'room_type_id': roomTypeId,
-          'check_in_date': stay.checkInText,
-          'check_out_date': stay.checkOutText,
-          'guests': stay.guests,
-        });
+  Future<Booking> create({required int roomTypeId, required Stay stay}) =>
+      _call(() async {
+        final res = await dio.post<dynamic>(
+          '/bookings',
+          data: {
+            'room_type_id': roomTypeId,
+            'check_in_date': stay.checkInText,
+            'check_out_date': stay.checkOutText,
+            'guests': stay.guests,
+          },
+        );
         return _booking(res);
       });
 
   /// "I will pay at the hotel." The room is kept with no countdown.
-  Future<Booking> payAtHotel(int bookingId) =>
-      _call(() async => _booking(await dio.post('/bookings/$bookingId/pay-at-hotel')));
+  Future<Booking> payAtHotel(int bookingId) => _call(
+    () async =>
+        _booking(await dio.post<dynamic>('/bookings/$bookingId/pay-at-hotel')),
+  );
 
   /// Pay with a card. Any card works (the payment is simulated), unless it has expired.
   /// The server saves the payment, checks it in the database and confirms the booking.
@@ -68,51 +74,58 @@ class BookingRepository {
     required String holder,
     required String expiry,
     required String cvv,
-  }) =>
-      _call(() async {
-        final res = await dio.post('/bookings/$bookingId/pay-card', data: {
-          'number': number,
-          'holder': holder,
-          'expiry': expiry,
-          'cvv': cvv,
-        });
-        return _booking(res);
-      });
+  }) => _call(() async {
+    final res = await dio.post<dynamic>(
+      '/bookings/$bookingId/pay-card',
+      data: {'number': number, 'holder': holder, 'expiry': expiry, 'cvv': cvv},
+    );
+    return _booking(res);
+  });
 
   /// Pay with a QR code. The server opens the payment in the database and gives us the QR text.
   Future<QrPayment> startQr(int bookingId) => _call(() async {
-        final res = await dio.post('/bookings/$bookingId/pay-qr');
-        final qr = res.data['qr'] as Map<String, dynamic>;
-        return QrPayment(
-          booking: _booking(res),
-          reference: qr['reference'] as String,
-          payload: qr['payload'] as String,
-          amount: (qr['amount'] as num).toDouble(),
-          merchant: (qr['merchant'] ?? 'Angkor Stay') as String,
-          secondsLeft: (qr['seconds_left'] as num).toInt(),
-        );
-      });
+    final res = await dio.post<dynamic>('/bookings/$bookingId/pay-qr');
+    final qr = res.data['qr'] as Map<String, dynamic>;
+    return QrPayment(
+      booking: _booking(res),
+      reference: qr['reference'] as String,
+      payload: qr['payload'] as String,
+      amount: (qr['amount'] as num).toDouble(),
+      merchant: (qr['merchant'] ?? 'Angkor Stay') as String,
+      secondsLeft: (qr['seconds_left'] as num).toInt(),
+    );
+  });
 
   /// "I paid." The server does not take our word: it finds the open QR payment in the database,
   /// checks it, and only then confirms the booking.
-  Future<Booking> verifyPayment(int bookingId) =>
-      _call(() async => _booking(await dio.post('/bookings/$bookingId/verify-payment')));
+  Future<Booking> verifyPayment(int bookingId) => _call(
+    () async => _booking(
+      await dio.post<dynamic>('/bookings/$bookingId/verify-payment'),
+    ),
+  );
 
   /// The guest's own bookings, newest first.
   Future<List<Booking>> mine() => _call(() async {
-        final res = await dio.get('/bookings');
-        return (res.data['data'] as List)
-            .map((j) => Booking.fromJson(j as Map<String, dynamic>))
-            .toList();
-      });
+    final res = await dio.get<dynamic>('/bookings');
+    return (res.data['data'] as List)
+        .map((j) => Booking.fromJson(j as Map<String, dynamic>))
+        .toList();
+  });
 
   /// Cancel before check-in. A paid online booking is refunded in full.
-  Future<Booking> cancel(int bookingId) =>
-      _call(() async => _booking(await dio.post('/bookings/$bookingId/cancel')));
+  Future<Booking> cancel(int bookingId) => _call(
+    () async =>
+        _booking(await dio.post<dynamic>('/bookings/$bookingId/cancel')),
+  );
+
+  /// Delete a finished booking from this guest's account for good (the hotel keeps its own record).
+  Future<void> delete(int bookingId) => _call(() async {
+    await dio.delete<dynamic>('/bookings/$bookingId');
+  });
 
   Future<void> release(int bookingId) => _call(() async {
-        await dio.post('/bookings/$bookingId/release');
-      });
+    await dio.post<dynamic>('/bookings/$bookingId/release');
+  });
 }
 
 final bookingRepositoryProvider = Provider<BookingRepository>(

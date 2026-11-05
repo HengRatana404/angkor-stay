@@ -22,7 +22,7 @@ class StaffBookingRepository {
       StaffBooking.fromJson(res.data['data'] as Map<String, dynamic>);
 
   Future<List<StaffBooking>> list({String search = '', String? status}) => _call(() async {
-        final res = await dio.get('/staff/bookings', queryParameters: {
+        final res = await dio.get<dynamic>('/staff/bookings', queryParameters: {
           'search': ?(search.trim().isEmpty ? null : search.trim()),
           'status': ?status,
         });
@@ -31,17 +31,17 @@ class StaffBookingRepository {
             .toList();
       });
 
-  Future<StaffBooking> get(int id) => _call(() async => _one(await dio.get('/staff/bookings/$id')));
+  Future<StaffBooking> get(int id) => _call(() async => _one(await dio.get<dynamic>('/staff/bookings/$id')));
 
   /// [method] is khqr, cash or card. The amount is the booking's own total.
   Future<StaffBooking> takePayment(int id, String method) => _call(() async =>
-      _one(await dio.post('/staff/bookings/$id/payments', data: {'method': method})));
+      _one(await dio.post<dynamic>('/staff/bookings/$id/payments', data: {'method': method})));
 
   Future<StaffBooking> checkIn(int id) =>
-      _call(() async => _one(await dio.post('/staff/bookings/$id/check-in')));
+      _call(() async => _one(await dio.post<dynamic>('/staff/bookings/$id/check-in')));
 
   Future<StaffBooking> checkOut(int id) =>
-      _call(() async => _one(await dio.post('/staff/bookings/$id/check-out')));
+      _call(() async => _one(await dio.post<dynamic>('/staff/bookings/$id/check-out')));
 }
 
 final staffBookingRepositoryProvider = Provider<StaffBookingRepository>(

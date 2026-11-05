@@ -150,6 +150,33 @@ class MyBookingsTest extends TestCase
         $this->assertNotSame('hacker@x.test', $me->email);
     }
 
+    public function test_staff_and_admin_cannot_change_their_name_or_phone(): void
+    {
+        foreach (['staff', 'admin'] as $role) {
+            $me = $this->makeUser($role);
+            $name = $me->name;
+
+            Sanctum::actingAs($me);
+            $this->patchJson('/api/auth/profile', ['name' => 'Renamed', 'phone' => '012 345 678'])
+                ->assertForbidden();
+
+            $this->assertSame($name, $me->fresh()->name);
+        }
+    }
+
+    public function test_staff_can_still_change_their_own_password(): void
+    {
+        $me = $this->makeUser('staff');
+        $old = $me->password;
+
+        Sanctum::actingAs($me);
+        $this->postJson('/api/auth/change-password', [
+            'current_password' => 'secret1234', 'password' => 'brand-new-pass', 'password_confirmation' => 'brand-new-pass',
+        ])->assertOk();
+
+        $this->assertNotSame($old, $me->fresh()->password);
+    }
+
     public function test_profile_rejects_a_bad_phone(): void
     {
         Sanctum::actingAs($this->makeUser('customer'));

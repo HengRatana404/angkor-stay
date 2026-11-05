@@ -135,7 +135,7 @@ void main() {
 
     expect(find.text('Welcome back'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);
-    expect(find.byIcon(Icons.settings), findsOneWidget);
+    expect(find.text('Angkor Stay'), findsOneWidget);
   });
 
   testWidgets('login form asks for email and password', (tester) async {
@@ -244,11 +244,12 @@ void main() {
 
     await tester.pumpWidget(await _app(loggedIn: user));
     await tester.pump();
+    await tester.pump(const Duration(seconds: 2)); // the opening splash plays first
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.text('Hello, Sok Dara'), findsOneWidget);
-    expect(find.text('CUSTOMER'), findsOneWidget);
+    expect(find.text('Customer'), findsNothing); // guests do not need a role badge
 
     // Let the health request finish (it fails in tests, that is fine).
     await tester.pumpAndSettle(const Duration(seconds: 7));
@@ -315,16 +316,20 @@ void main() {
 
   // ------------------------------------------------------------ ticket 05
 
-  testWidgets('home shows the stay card and a chip with rooms left on each card', (tester) async {
+  testWidgets('home shows a chip with rooms left on each card, tapping opens booking screen with stay card', (tester) async {
     _tallScreen(tester);
     await tester.pumpWidget(await _app(loggedIn: customer));
     await tester.pumpAndSettle(const Duration(seconds: 7));
 
-    expect(find.text('Your stay'), findsOneWidget);
-    expect(find.text('1 night'), findsOneWidget);
     expect(find.text('5 rooms left'), findsOneWidget); // Single
     expect(find.text('No room left'), findsOneWidget); // Double
     expect(find.text('Only 1 left'), findsOneWidget); // VIP
+
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your stay'), findsOneWidget);
+    expect(find.text('1 night'), findsOneWidget);
   });
 
   testWidgets('changing guests updates the stay and warns when a room is too small', (tester) async {
@@ -332,7 +337,10 @@ void main() {
     await tester.pumpWidget(await _app(loggedIn: customer));
     await tester.pumpAndSettle(const Duration(seconds: 7));
 
-    expect(find.text('Fits up to 2 guests'), findsNothing);
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('fits up to 2 guests'), findsNothing);
 
     await tester.tap(find.byKey(const Key('guests-plus')));
     await tester.tap(find.byKey(const Key('guests-plus')));
@@ -340,13 +348,16 @@ void main() {
 
     expect(find.text('3'), findsOneWidget);
     // Single holds 2 guests, so with 3 guests it cannot be booked.
-    expect(find.text('Fits up to 2 guests'), findsWidgets);
+    expect(find.textContaining('fits up to 2 guests'), findsWidgets);
   });
 
   testWidgets('guests cannot go below 1 or above 6', (tester) async {
     _tallScreen(tester);
     await tester.pumpWidget(await _app(loggedIn: customer));
     await tester.pumpAndSettle(const Duration(seconds: 7));
+
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
 
     final minus = tester.widget<IconButton>(find.byKey(const Key('guests-minus')));
     expect(minus.onPressed, isNull);
@@ -380,11 +391,12 @@ void main() {
     await tester.pumpWidget(await _app(loggedIn: customer));
     await tester.pumpAndSettle(const Duration(seconds: 7));
 
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('guests-plus')));
     await tester.tap(find.byKey(const Key('guests-plus')));
     await tester.pump();
-    await tester.tap(find.text('Single'));
-    await tester.pumpAndSettle();
 
     final button = tester.widget<FilledButton>(find.byKey(const Key('book-button')));
     expect(button.onPressed, isNull);
@@ -608,7 +620,7 @@ void main() {
       'price_per_night': 12.5,
       'capacity': 1,
       'cover_image': null,
-      'images': [],
+      'images': <String>[],
     });
     expect(cents.priceText, '\$12.50');
     expect(cents.guestsText, '1 guest');

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Angkor Stay API",
-    "description": "Hotel booking API: Laravel 13 + PostgreSQL. Import the environment too. Run folders 0, 1, 2, 3, 4, 5, 6, 7 in order. Never run folder 8 in the runner.",
+    "description": "Hotel booking API: Laravel 13 + PostgreSQL. Every request has the full address http://127.0.0.1:8000/api/... (like a plain Postman request), so no environment is needed. Open the collection, tab Variables, and type the emails and passwords in the Current value column (they stay on your PC). Run folders 0, 1, 2, 3, 4, 5, 6, 7 in order. Never run folder 8 in the runner.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -24,8 +24,8 @@
           "function iso(d) { return d.getFullYear() + \"-\" + (\"0\" + (d.getMonth() + 1)).slice(-2) + \"-\" + (\"0\" + d.getDate()).slice(-2); }",
           "var a = new Date(); a.setDate(a.getDate() + 40);",
           "var b = new Date(); b.setDate(b.getDate() + 42);",
-          "pm.environment.set(\"stay_in\", iso(a));",
-          "pm.environment.set(\"stay_out\", iso(b));"
+          "pm.collectionVariables.set(\"stay_in\", iso(a));",
+          "pm.collectionVariables.set(\"stay_out\", iso(b));"
         ]
       }
     }
@@ -59,11 +59,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/health",
+              "raw": "http://127.0.0.1:8000/api/health",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "health"
               ]
             },
@@ -98,11 +104,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/settings/public",
+              "raw": "http://127.0.0.1:8000/api/settings/public",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "settings",
                 "public"
               ]
@@ -131,7 +143,7 @@
                   "});",
                   "pm.test(\"Answer has token\", function () { pm.expect(pm.response.json()).to.have.property(\"token\"); });",
                   "var __v = (function () { try { return pm.response.json().token; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"customer_token\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"customer_token\", String(__v)); }"
                 ]
               }
             }
@@ -149,11 +161,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/login",
+              "raw": "http://127.0.0.1:8000/api/auth/login",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "login"
               ]
@@ -186,7 +204,7 @@
                   "});",
                   "pm.test(\"Answer has token\", function () { pm.expect(pm.response.json()).to.have.property(\"token\"); });",
                   "var __v = (function () { try { return pm.response.json().token; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"staff_token\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"staff_token\", String(__v)); }"
                 ]
               }
             }
@@ -204,11 +222,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/login",
+              "raw": "http://127.0.0.1:8000/api/auth/login",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "login"
               ]
@@ -241,7 +265,7 @@
                   "});",
                   "pm.test(\"Answer has token\", function () { pm.expect(pm.response.json()).to.have.property(\"token\"); });",
                   "var __v = (function () { try { return pm.response.json().token; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"admin_token\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"admin_token\", String(__v)); }"
                 ]
               }
             }
@@ -259,11 +283,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/login",
+              "raw": "http://127.0.0.1:8000/api/auth/login",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "login"
               ]
@@ -307,11 +337,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/me",
+              "raw": "http://127.0.0.1:8000/api/auth/me",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "me"
               ]
@@ -359,11 +395,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/login",
+              "raw": "http://127.0.0.1:8000/api/auth/login",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "login"
               ]
@@ -412,11 +454,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/login",
+              "raw": "http://127.0.0.1:8000/api/auth/login",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "login"
               ]
@@ -454,9 +502,9 @@
                   "});",
                   "pm.test(\"Three room types\", function () { pm.expect(pm.response.json().data.length).to.be.at.least(3); });",
                   "var __v = (function () { try { return pm.response.json().data.find(function (t) { return t.name === \"Single\"; }).id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"room_type_id\", String(__v)); }",
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"room_type_id\", String(__v)); }",
                   "var __v = (function () { try { return pm.response.json().data.find(function (t) { return t.name === \"Double\"; }).id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"double_type_id\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"double_type_id\", String(__v)); }"
                 ]
               }
             }
@@ -470,11 +518,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/room-types",
+              "raw": "http://127.0.0.1:8000/api/room-types",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "room-types"
               ]
             },
@@ -509,11 +563,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/room-types?check_in_date={{stay_in}}&check_out_date={{stay_out}}",
+              "raw": "http://127.0.0.1:8000/api/room-types?check_in_date={{stay_in}}&check_out_date={{stay_out}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "room-types"
               ],
               "query": [
@@ -558,11 +618,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/room-types/{{room_type_id}}",
+              "raw": "http://127.0.0.1:8000/api/room-types/{{room_type_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "room-types",
                 "{{room_type_id}}"
               ]
@@ -590,7 +656,7 @@
                   "});",
                   "pm.test(\"Status is pending with a countdown\", function () { var d = pm.response.json().data; pm.expect(d.status).to.eql(\"pending\"); pm.expect(d.hold_seconds_left).to.be.above(0); });",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"booking_a\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"booking_a\", String(__v)); }"
                 ]
               }
             }
@@ -608,11 +674,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -663,11 +735,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_a}}",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_a}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_a}}"
               ]
@@ -713,11 +791,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -771,11 +855,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -825,11 +915,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_a}}/pay-at-hotel",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_a}}/pay-at-hotel",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_a}}",
                 "pay-at-hotel"
@@ -858,7 +954,7 @@
                   "pm.test(\"Status is 200\", function () {",
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
-                  "pm.test(\"Booking A is in my list\", function () { pm.expect(pm.response.json().data.some(function (b) { return String(b.id) === pm.environment.get(\"booking_a\"); })).to.eql(true); });"
+                  "pm.test(\"Booking A is in my list\", function () { pm.expect(pm.response.json().data.some(function (b) { return String(b.id) === pm.collectionVariables.get(\"booking_a\"); })).to.eql(true); });"
                 ]
               }
             }
@@ -872,11 +968,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -917,11 +1019,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_a}}/cancel",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_a}}/cancel",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_a}}",
                 "cancel"
@@ -964,11 +1072,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_a}}/cancel",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_a}}/cancel",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_a}}",
                 "cancel"
@@ -998,7 +1112,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"booking_b\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"booking_b\", String(__v)); }"
                 ]
               }
             }
@@ -1016,11 +1130,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -1070,11 +1190,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_b}}/pay-at-hotel",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_b}}/pay-at-hotel",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_b}}",
                 "pay-at-hotel"
@@ -1104,7 +1230,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"booking_c\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"booking_c\", String(__v)); }"
                 ]
               }
             }
@@ -1122,11 +1248,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -1181,11 +1313,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_c}}/pay-card",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_c}}/pay-card",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_c}}",
                 "pay-card"
@@ -1242,11 +1380,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_c}}/pay-card",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_c}}/pay-card",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_c}}",
                 "pay-card"
@@ -1299,11 +1443,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_c}}/pay-qr",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_c}}/pay-qr",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_c}}",
                 "pay-qr"
@@ -1347,11 +1497,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_c}}/verify-payment",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_c}}/verify-payment",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_c}}",
                 "verify-payment"
@@ -1382,7 +1538,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"booking_d\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"booking_d\", String(__v)); }"
                 ]
               }
             }
@@ -1400,11 +1556,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -1460,11 +1622,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_d}}/pay-card",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_d}}/pay-card",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_d}}",
                 "pay-card"
@@ -1521,11 +1689,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_d}}/pay-card",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_d}}/pay-card",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_d}}",
                 "pay-card"
@@ -1578,11 +1752,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_d}}/cancel",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_d}}/cancel",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_d}}",
                 "cancel"
@@ -1631,11 +1811,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings?search=AS-&status=pending",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings?search=AS-&status=pending",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings"
               ],
@@ -1688,11 +1874,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings/{{booking_b}}",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings/{{booking_b}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings",
                 "{{booking_b}}"
@@ -1739,11 +1931,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings/{{booking_b}}/payments",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings/{{booking_b}}/payments",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings",
                 "{{booking_b}}",
@@ -1800,11 +1998,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings/{{booking_b}}/payments",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings/{{booking_b}}/payments",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings",
                 "{{booking_b}}",
@@ -1861,11 +2065,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings/{{booking_b}}/payments",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings/{{booking_b}}/payments",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings",
                 "{{booking_b}}",
@@ -1917,11 +2127,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings/{{booking_b}}/check-in",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings/{{booking_b}}/check-in",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings",
                 "{{booking_b}}",
@@ -1965,11 +2181,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings/{{booking_b}}/check-out",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings/{{booking_b}}/check-out",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings",
                 "{{booking_b}}",
@@ -2013,11 +2235,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{booking_b}}/cancel",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{booking_b}}/cancel",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{booking_b}}",
                 "cancel"
@@ -2066,11 +2294,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/dashboard",
+              "raw": "http://127.0.0.1:8000/api/admin/dashboard",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "dashboard"
               ]
@@ -2112,11 +2346,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/staff",
+              "raw": "http://127.0.0.1:8000/api/admin/staff",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "staff"
               ]
@@ -2145,7 +2385,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"new_staff_id\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"new_staff_id\", String(__v)); }"
                 ]
               }
             },
@@ -2154,7 +2394,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.environment.set(\"rnd7\", String(1000000 + Math.floor(Math.random() * 8999999)));"
+                  "pm.collectionVariables.set(\"rnd7\", String(1000000 + Math.floor(Math.random() * 8999999)));"
                 ]
               }
             }
@@ -2172,11 +2412,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/staff",
+              "raw": "http://127.0.0.1:8000/api/admin/staff",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "staff"
               ]
@@ -2232,11 +2478,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/staff/{{new_staff_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/staff/{{new_staff_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "staff",
                 "{{new_staff_id}}"
@@ -2277,7 +2529,7 @@
                   "});",
                   "pm.test(\"Answer has data\", function () { pm.expect(pm.response.json()).to.have.property(\"data\"); });",
                   "var __v = (function () { try { return JSON.stringify(pm.response.json().data); } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"settings_json\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"settings_json\", String(__v)); }"
                 ]
               }
             }
@@ -2291,11 +2543,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/settings",
+              "raw": "http://127.0.0.1:8000/api/admin/settings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "settings"
               ]
@@ -2334,7 +2592,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "// Send back exactly what the server has now, so running the whole collection changes nothing.",
-                  "var s = JSON.parse(pm.environment.get(\"settings_json\") || \"{}\");",
+                  "var s = JSON.parse(pm.collectionVariables.get(\"settings_json\") || \"{}\");",
                   "pm.request.body.update({ mode: \"raw\", raw: JSON.stringify(s, null, 2), options: { raw: { language: \"json\" } } });"
                 ]
               }
@@ -2353,11 +2611,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/settings",
+              "raw": "http://127.0.0.1:8000/api/admin/settings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "settings"
               ]
@@ -2412,11 +2676,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/settings",
+              "raw": "http://127.0.0.1:8000/api/admin/settings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "settings"
               ]
@@ -2467,11 +2737,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types"
               ]
@@ -2500,7 +2776,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"new_type_id\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"new_type_id\", String(__v)); }"
                 ]
               }
             }
@@ -2518,11 +2794,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types"
               ]
@@ -2576,11 +2858,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types"
               ]
@@ -2635,11 +2923,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types/{{new_type_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types/{{new_type_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types",
                 "{{new_type_id}}"
@@ -2679,7 +2973,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"new_room_id\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"new_room_id\", String(__v)); }"
                 ]
               }
             },
@@ -2688,7 +2982,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.environment.set(\"rnd7\", String(Math.floor(Math.random() * 90000) + 10000));"
+                  "pm.collectionVariables.set(\"rnd7\", String(Math.floor(Math.random() * 90000) + 10000));"
                 ]
               }
             }
@@ -2706,11 +3000,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/rooms",
+              "raw": "http://127.0.0.1:8000/api/admin/rooms",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "rooms"
               ]
@@ -2764,11 +3064,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/rooms/{{new_room_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/rooms/{{new_room_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "rooms",
                 "{{new_room_id}}"
@@ -2820,11 +3126,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types/{{new_type_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types/{{new_type_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types",
                 "{{new_type_id}}"
@@ -2866,11 +3178,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/rooms/{{new_room_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/rooms/{{new_room_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "rooms",
                 "{{new_room_id}}"
@@ -2912,11 +3230,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types/{{new_type_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types/{{new_type_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types",
                 "{{new_type_id}}"
@@ -2963,11 +3287,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -3000,11 +3330,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/dashboard",
+              "raw": "http://127.0.0.1:8000/api/admin/dashboard",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "dashboard"
               ]
@@ -3045,11 +3381,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/staff/bookings",
+              "raw": "http://127.0.0.1:8000/api/staff/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "staff",
                 "bookings"
               ]
@@ -3090,11 +3432,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/dashboard",
+              "raw": "http://127.0.0.1:8000/api/admin/dashboard",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "dashboard"
               ]
@@ -3139,11 +3487,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/settings",
+              "raw": "http://127.0.0.1:8000/api/admin/settings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "settings"
               ]
@@ -3193,11 +3547,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/999999",
+              "raw": "http://127.0.0.1:8000/api/bookings/999999",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "999999"
               ]
@@ -3247,11 +3607,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types"
               ]
@@ -3291,8 +3657,8 @@
                   "});",
                   "var t = pm.response.json().data.find(function (x) { return x.name === \"Postman One-Room Suite\"; });",
                   "pm.test(\"The one-room type exists\", function () { pm.expect(t).to.not.eql(undefined); });",
-                  "pm.environment.set(\"suite_type_id\", String(t.id));",
-                  "pm.environment.set(\"suite_room_id\", t.rooms.length ? String(t.rooms[0].id) : \"\");"
+                  "pm.collectionVariables.set(\"suite_type_id\", String(t.id));",
+                  "pm.collectionVariables.set(\"suite_room_id\", t.rooms.length ? String(t.rooms[0].id) : \"\");"
                 ]
               }
             }
@@ -3306,11 +3672,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types"
               ]
@@ -3355,11 +3727,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/rooms",
+              "raw": "http://127.0.0.1:8000/api/admin/rooms",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "rooms"
               ]
@@ -3398,7 +3776,7 @@
                   "  pm.expect([200]).to.include(pm.response.code);",
                   "});",
                   "var t = pm.response.json().data.find(function (x) { return x.name === \"Postman One-Room Suite\"; });",
-                  "pm.environment.set(\"suite_room_id\", String(t.rooms[0].id));"
+                  "pm.collectionVariables.set(\"suite_room_id\", String(t.rooms[0].id));"
                 ]
               }
             }
@@ -3412,11 +3790,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/room-types",
+              "raw": "http://127.0.0.1:8000/api/admin/room-types",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "room-types"
               ]
@@ -3461,11 +3845,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/rooms/{{suite_room_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/rooms/{{suite_room_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "rooms",
                 "{{suite_room_id}}"
@@ -3504,7 +3894,7 @@
                   "  pm.expect([201]).to.include(pm.response.code);",
                   "});",
                   "var __v = (function () { try { return pm.response.json().data.id; } catch (e) { return undefined; } })();",
-                  "if (__v !== undefined && __v !== null) { pm.environment.set(\"suite_booking\", String(__v)); }"
+                  "if (__v !== undefined && __v !== null) { pm.collectionVariables.set(\"suite_booking\", String(__v)); }"
                 ]
               }
             }
@@ -3522,11 +3912,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -3583,11 +3979,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings",
+              "raw": "http://127.0.0.1:8000/api/bookings",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings"
               ]
             },
@@ -3638,11 +4040,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/room-types?check_in_date={{stay_in}}&check_out_date={{stay_out}}",
+              "raw": "http://127.0.0.1:8000/api/room-types?check_in_date={{stay_in}}&check_out_date={{stay_out}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "room-types"
               ],
               "query": [
@@ -3685,11 +4093,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/bookings/{{suite_booking}}/release",
+              "raw": "http://127.0.0.1:8000/api/bookings/{{suite_booking}}/release",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "bookings",
                 "{{suite_booking}}",
                 "release"
@@ -3735,11 +4149,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/rooms/{{suite_room_id}}",
+              "raw": "http://127.0.0.1:8000/api/admin/rooms/{{suite_room_id}}",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "rooms",
                 "{{suite_room_id}}"
@@ -3797,11 +4217,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/admin/maintenance/run",
+              "raw": "http://127.0.0.1:8000/api/admin/maintenance/run",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "admin",
                 "maintenance",
                 "run"
@@ -3848,11 +4274,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/register",
+              "raw": "http://127.0.0.1:8000/api/auth/register",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "register"
               ]
@@ -3900,11 +4332,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/verify-email",
+              "raw": "http://127.0.0.1:8000/api/auth/verify-email",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "verify-email"
               ]
@@ -3951,11 +4389,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/resend-code",
+              "raw": "http://127.0.0.1:8000/api/auth/resend-code",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "resend-code"
               ]
@@ -4002,11 +4446,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/forgot-password",
+              "raw": "http://127.0.0.1:8000/api/auth/forgot-password",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "forgot-password"
               ]
@@ -4053,11 +4503,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/check-reset-code",
+              "raw": "http://127.0.0.1:8000/api/auth/check-reset-code",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "check-reset-code"
               ]
@@ -4104,11 +4560,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/reset-password",
+              "raw": "http://127.0.0.1:8000/api/auth/reset-password",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "reset-password"
               ]
@@ -4155,11 +4617,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/profile",
+              "raw": "http://127.0.0.1:8000/api/auth/profile",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "profile"
               ]
@@ -4213,11 +4681,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/change-password",
+              "raw": "http://127.0.0.1:8000/api/auth/change-password",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "change-password"
               ]
@@ -4267,11 +4741,17 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/auth/logout",
+              "raw": "http://127.0.0.1:8000/api/auth/logout",
+              "protocol": "http",
               "host": [
-                "{{base_url}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8000",
               "path": [
+                "api",
                 "auth",
                 "logout"
               ]
@@ -4289,6 +4769,44 @@
           }
         }
       ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "customer_email",
+      "value": ""
+    },
+    {
+      "key": "customer_password",
+      "value": ""
+    },
+    {
+      "key": "staff_email",
+      "value": ""
+    },
+    {
+      "key": "staff_password",
+      "value": ""
+    },
+    {
+      "key": "admin_email",
+      "value": ""
+    },
+    {
+      "key": "admin_password",
+      "value": ""
+    },
+    {
+      "key": "customer_token",
+      "value": ""
+    },
+    {
+      "key": "staff_token",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
     }
   ]
 }

@@ -35,7 +35,7 @@ Route::get('/settings/public', [PublicSettingsController::class, 'show']);
 
 // Anyone can look at the rooms, like on a hotel website.
 Route::get('/room-types', [RoomTypeController::class, 'index']);
-Route::get('/room-types/{roomType}', [RoomTypeController::class, 'show']);
+Route::get('/room-types/{roomType}', [RoomTypeController::class, 'show'])->where('roomType', '[0-9]{1,9}');
 
 Route::prefix('auth')->group(function () {
     Route::middleware('throttle:10,1')->group(function () {
@@ -56,48 +56,50 @@ Route::prefix('auth')->group(function () {
 // (`hotel.network`). Customers can connect from anywhere.
 Route::middleware(['auth:sanctum', 'hotel.network'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
-    Route::patch('/auth/profile', [AuthController::class, 'updateProfile']);
+    // Only guests edit their own name and phone. Staff and admin accounts are managed by the admin.
+    Route::patch('/auth/profile', [AuthController::class, 'updateProfile'])->middleware('role:customer');
     Route::post('/auth/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
 
     Route::prefix('bookings')->group(function () {
         Route::get('/', [BookingController::class, 'index']);
         Route::post('/', [BookingController::class, 'store'])->middleware('throttle:20,1');
-        Route::post('/{id}/cancel', [BookingController::class, 'cancel'])->whereNumber('id')->middleware('throttle:20,1');
-        Route::get('/{id}', [BookingController::class, 'show'])->whereNumber('id');
-        Route::post('/{id}/release', [BookingController::class, 'release'])->whereNumber('id');
-        Route::post('/{id}/pay-at-hotel', [BookingController::class, 'payAtHotel'])->whereNumber('id');
+        Route::post('/{id}/cancel', [BookingController::class, 'cancel'])->where('id', '[0-9]{1,9}')->middleware('throttle:20,1');
+        Route::get('/{id}', [BookingController::class, 'show'])->where('id', '[0-9]{1,9}');
+        Route::post('/{id}/release', [BookingController::class, 'release'])->where('id', '[0-9]{1,9}');
+        Route::delete('/{id}', [BookingController::class, 'destroy'])->where('id', '[0-9]{1,9}')->middleware('throttle:20,1');
+        Route::post('/{id}/pay-at-hotel', [BookingController::class, 'payAtHotel'])->where('id', '[0-9]{1,9}');
 
         // Pay online (simulated): a card, or a QR code. The server checks every payment in the database.
-        Route::post('/{id}/pay-card', [OnlinePaymentController::class, 'payByCard'])->whereNumber('id')->middleware('throttle:20,1');
-        Route::post('/{id}/pay-qr', [OnlinePaymentController::class, 'startQr'])->whereNumber('id')->middleware('throttle:20,1');
-        Route::post('/{id}/verify-payment', [OnlinePaymentController::class, 'verify'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::post('/{id}/pay-card', [OnlinePaymentController::class, 'payByCard'])->where('id', '[0-9]{1,9}')->middleware('throttle:20,1');
+        Route::post('/{id}/pay-qr', [OnlinePaymentController::class, 'startQr'])->where('id', '[0-9]{1,9}')->middleware('throttle:20,1');
+        Route::post('/{id}/verify-payment', [OnlinePaymentController::class, 'verify'])->where('id', '[0-9]{1,9}')->middleware('throttle:30,1');
     });
 
     // Staff and admin: bookings, payment at the hotel, check-in and check-out.
     Route::prefix('staff/bookings')->middleware('role:staff,admin')->group(function () {
         Route::get('/', [StaffBookingController::class, 'index']);
-        Route::get('/{id}', [StaffBookingController::class, 'show'])->whereNumber('id');
-        Route::post('/{id}/payments', [StaffBookingController::class, 'takePayment'])->whereNumber('id');
-        Route::post('/{id}/check-in', [StaffBookingController::class, 'checkIn'])->whereNumber('id');
-        Route::post('/{id}/check-out', [StaffBookingController::class, 'checkOut'])->whereNumber('id');
+        Route::get('/{id}', [StaffBookingController::class, 'show'])->where('id', '[0-9]{1,9}');
+        Route::post('/{id}/payments', [StaffBookingController::class, 'takePayment'])->where('id', '[0-9]{1,9}');
+        Route::post('/{id}/check-in', [StaffBookingController::class, 'checkIn'])->where('id', '[0-9]{1,9}');
+        Route::post('/{id}/check-out', [StaffBookingController::class, 'checkOut'])->where('id', '[0-9]{1,9}');
     });
 
     // Admin only.
     Route::prefix('admin')->middleware('role:admin')->group(function () {
         Route::get('/staff', [StaffController::class, 'index']);
         Route::post('/staff', [StaffController::class, 'store']);
-        Route::patch('/staff/{id}', [StaffController::class, 'update'])->whereNumber('id');
+        Route::patch('/staff/{id}', [StaffController::class, 'update'])->where('id', '[0-9]{1,9}');
 
         Route::get('/dashboard', [DashboardController::class, 'show']);
 
         Route::get('/room-types', [RoomTypeAdminController::class, 'index']);
         Route::post('/room-types', [RoomTypeAdminController::class, 'store']);
-        Route::patch('/room-types/{id}', [RoomTypeAdminController::class, 'update'])->whereNumber('id');
-        Route::delete('/room-types/{id}', [RoomTypeAdminController::class, 'destroy'])->whereNumber('id');
+        Route::patch('/room-types/{id}', [RoomTypeAdminController::class, 'update'])->where('id', '[0-9]{1,9}');
+        Route::delete('/room-types/{id}', [RoomTypeAdminController::class, 'destroy'])->where('id', '[0-9]{1,9}');
 
         Route::post('/rooms', [RoomAdminController::class, 'store']);
-        Route::patch('/rooms/{id}', [RoomAdminController::class, 'update'])->whereNumber('id');
-        Route::delete('/rooms/{id}', [RoomAdminController::class, 'destroy'])->whereNumber('id');
+        Route::patch('/rooms/{id}', [RoomAdminController::class, 'update'])->where('id', '[0-9]{1,9}');
+        Route::delete('/rooms/{id}', [RoomAdminController::class, 'destroy'])->where('id', '[0-9]{1,9}');
 
         Route::post('/maintenance/run', [MaintenanceController::class, 'run'])->middleware('throttle:10,1');
 

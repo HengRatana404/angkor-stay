@@ -81,7 +81,7 @@ Future<void> _open(WidgetTester tester, Booking booking, _FakeBookings repo) asy
   ));
 
   final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-  navigator.push(MaterialPageRoute(builder: (_) => BookingHoldScreen(booking: booking)));
+  navigator.push(MaterialPageRoute<void>(builder: (_) => BookingHoldScreen(booking: booking)));
   await tester.pumpAndSettle();
 }
 
@@ -300,7 +300,7 @@ void main() {
         'paid': false,
         'hold_seconds_left': 200,
         'guest': null,
-        'payments': [],
+        'payments': <Object>[],
         'checked_in_at': null,
         'checked_in_by': null,
         'checked_out_at': null,

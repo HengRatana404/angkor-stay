@@ -170,7 +170,7 @@ Future<_FakePay> _open(WidgetTester tester, Booking booking, {bool settingsFail 
   ));
 
   tester.state<NavigatorState>(find.byType(Navigator)).push(
-        MaterialPageRoute(builder: (_) => BookingHoldScreen(booking: booking)),
+        MaterialPageRoute<void>(builder: (_) => BookingHoldScreen(booking: booking)),
       );
   await tester.pumpAndSettle();
   return repo;

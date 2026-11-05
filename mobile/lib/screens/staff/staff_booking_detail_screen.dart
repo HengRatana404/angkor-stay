@@ -8,6 +8,8 @@ import '../../staff/staff_booking_repository.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/status_chip.dart';
 import 'take_payment_screen.dart';
+import '../../widgets/angkor_app_bar.dart';
+import '../../core/theme.dart';
 
 /// One booking: the guest, the money, who did what, and the buttons.
 class StaffBookingDetailScreen extends ConsumerStatefulWidget {
@@ -15,10 +17,12 @@ class StaffBookingDetailScreen extends ConsumerStatefulWidget {
   const StaffBookingDetailScreen({super.key, required this.bookingId});
 
   @override
-  ConsumerState<StaffBookingDetailScreen> createState() => _StaffBookingDetailScreenState();
+  ConsumerState<StaffBookingDetailScreen> createState() =>
+      _StaffBookingDetailScreenState();
 }
 
-class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScreen> {
+class _StaffBookingDetailScreenState
+    extends ConsumerState<StaffBookingDetailScreen> {
   bool _busy = false;
   String? _error;
 
@@ -34,7 +38,10 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
         title: Text(title),
         content: Text(text),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             key: const Key('confirm-yes'),
             onPressed: () => Navigator.pop(ctx, true),
@@ -46,7 +53,10 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
     return result ?? false;
   }
 
-  Future<void> _run(Future<StaffBooking> Function(StaffBookingRepository repo) action, String done) async {
+  Future<void> _run(
+    Future<StaffBooking> Function(StaffBookingRepository repo) action,
+    String done,
+  ) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -79,13 +89,14 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
       'Check ${b.guestName} out of room ${b.roomNumber}?',
       'Check out',
     );
-    if (ok) await _run((r) => r.checkOut(b.id), '${b.guestName} is checked out.');
+    if (ok) {
+      await _run((r) => r.checkOut(b.id), '${b.guestName} is checked out.');
+    }
   }
 
   Future<void> _takePayment(StaffBooking b) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TakePaymentScreen(booking: b)),
-    );
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => TakePaymentScreen(booking: b)));
     _refresh();
   }
 
@@ -94,7 +105,7 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
     final booking = ref.watch(staffBookingProvider(widget.bookingId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Booking')),
+      appBar: AngkorAppBar(title: 'Booking'),
       body: booking.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => ListView(
@@ -111,21 +122,51 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
         ),
         data: (b) => _body(context, b),
       ),
+      bottomNavigationBar: booking.maybeWhen(
+        data: (b) {
+          final buttons = _buttons(b);
+          if (buttons.isEmpty) return null;
+          return Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).viewPadding.bottom),
+            decoration: BoxDecoration(
+              color: context.pal.surface,
+              border: Border(top: BorderSide(color: context.pal.border)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: buttons,
+            ),
+          );
+        },
+        orElse: () => null,
+      ),
     );
   }
 
   Widget _body(BuildContext context, StaffBooking b) {
-    final theme = Theme.of(context);
     final paid = b.payments.where((p) => p.status == 'paid').toList();
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+        if (_error != null) ...[
+          ErrorBanner(_error!),
+          const SizedBox(height: 16),
+        ],
         Row(
           children: [
             Expanded(
-              child: Text(b.code, key: const Key('detail-code'), style: theme.textTheme.headlineMedium),
+              child: Text(
+                b.code,
+                key: const Key('detail-code'),
+                style: TextStyle(
+                  fontFamily: 'serif',
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  color: context.pal.text,
+                ),
+              ),
             ),
             StatusChip(b.status),
           ],
@@ -137,7 +178,8 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
           title: 'Guest',
           children: [
             _Row(Icons.person_outline, b.guestName),
-            if (b.guest?.phone != null) _Row(Icons.phone_outlined, b.guest!.phone!),
+            if (b.guest?.phone != null)
+              _Row(Icons.phone_outlined, b.guest!.phone!),
             if (b.guest != null) _Row(Icons.email_outlined, b.guest!.email),
           ],
         ),
@@ -146,11 +188,17 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
         _Section(
           title: 'Stay',
           children: [
-            _Row(Icons.meeting_room_outlined, '${b.roomTypeName} · Room ${b.roomNumber}'),
+            _Row(
+              Icons.meeting_room_outlined,
+              '${b.roomTypeName} · Room ${b.roomNumber}',
+            ),
             _Row(Icons.login, 'Check-in ${formatShortDate(b.checkIn)}'),
             _Row(Icons.logout, 'Check-out ${formatShortDate(b.checkOut)}'),
             _Row(Icons.nights_stay_outlined, nightsText(b.nights)),
-            _Row(Icons.people_outline, b.guestCount == 1 ? '1 guest' : '${b.guestCount} guests'),
+            _Row(
+              Icons.people_outline,
+              b.guestCount == 1 ? '1 guest' : '${b.guestCount} guests',
+            ),
           ],
         ),
 
@@ -158,7 +206,10 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
         _Section(
           title: 'Payment',
           children: [
-            _Row(Icons.attach_money, '${formatMoney(b.pricePerNight)} × ${nightsText(b.nights)} = ${formatMoney(b.totalPrice)}'),
+            _Row(
+              Icons.attach_money,
+              '${formatMoney(b.pricePerNight)} × ${nightsText(b.nights)} = ${formatMoney(b.totalPrice)}',
+            ),
             if (b.discountAmount > 0)
               _Row(
                 Icons.local_offer_outlined,
@@ -191,6 +242,11 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
           ],
         ),
 
+        if (b.status == 'no_show' && paid.isNotEmpty)
+          const _NoteBox(
+            'Marked as a no-show. The guest did not arrive and this payment was not refunded.',
+          ),
+
         // ------------------------------------------------------ who did what
         if (b.checkedInBy != null || b.checkedOutBy != null)
           _Section(
@@ -212,7 +268,6 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
           ),
 
         const SizedBox(height: 8),
-        ..._buttons(b),
       ],
     );
   }
@@ -222,37 +277,52 @@ class _StaffBookingDetailScreenState extends ConsumerState<StaffBookingDetailScr
     final widgets = <Widget>[];
 
     if (a.canTakePayment) {
-      widgets.add(FilledButton.icon(
-        key: const Key('take-payment'),
-        onPressed: _busy ? null : () => _takePayment(b),
-        icon: const Icon(Icons.payments_outlined),
-        label: Text('Take payment (${formatMoney(b.totalPrice)})'),
-      ));
+      widgets.add(
+        FilledButton.icon(
+          key: const Key('take-payment'),
+          onPressed: _busy ? null : () => _takePayment(b),
+          icon: const Icon(Icons.payments_outlined),
+          label: Text('Take payment (${formatMoney(b.totalPrice)})'),
+        ),
+      );
     }
 
     if (a.canCheckIn) {
-      widgets.add(FilledButton.icon(
-        key: const Key('check-in'),
-        onPressed: _busy ? null : () => _checkIn(b),
-        icon: const Icon(Icons.login),
-        label: const Text('Check in'),
-      ));
+      widgets.add(
+        FilledButton.icon(
+          key: const Key('check-in'),
+          onPressed: _busy ? null : () => _checkIn(b),
+          icon: const Icon(Icons.login),
+          label: const Text('Check in'),
+        ),
+      );
     } else if (b.status == 'confirmed' && a.checkInProblem != null) {
       // Paid, but not time yet (or the stay is over): say why.
-      widgets.add(Text(a.checkInProblem!, key: const Key('check-in-problem'), textAlign: TextAlign.center));
+      widgets.add(
+        Text(
+          a.checkInProblem!,
+          key: const Key('check-in-problem'),
+          textAlign: TextAlign.center,
+        ),
+      );
     }
 
     if (a.canCheckOut) {
-      widgets.add(FilledButton.icon(
-        key: const Key('check-out'),
-        onPressed: _busy ? null : () => _checkOut(b),
-        icon: const Icon(Icons.logout),
-        label: const Text('Check out'),
-      ));
+      widgets.add(
+        FilledButton.icon(
+          key: const Key('check-out'),
+          onPressed: _busy ? null : () => _checkOut(b),
+          icon: const Icon(Icons.logout),
+          label: const Text('Check out'),
+        ),
+      );
     }
 
     return [
-      for (final w in widgets) ...[w, const SizedBox(height: 12)],
+      for (var i = 0; i < widgets.length; i++) ...[
+        if (i > 0) const SizedBox(height: 10),
+        widgets[i],
+      ],
     ];
   }
 }
@@ -264,18 +334,25 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final pal = context.pal;
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            ...children,
-          ],
-        ),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: pal.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: pal.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: pal.text),
+          ),
+          const SizedBox(height: 8),
+          ...children,
+        ],
       ),
     );
   }
@@ -288,14 +365,55 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = context.pal;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: pal.goldWash,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 17, color: pal.goldDeep),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Text(text, style: TextStyle(color: pal.text, height: 1.25)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoteBox extends StatelessWidget {
+  final String text;
+  const _NoteBox(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = context.pal;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: pal.goldWash,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: pal.goldSoft),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: pal.goldDeep),
           const SizedBox(width: 10),
-          Expanded(child: Text(text)),
+          Expanded(child: Text(text, style: TextStyle(color: pal.goldDeep, fontWeight: FontWeight.w600))),
         ],
       ),
     );

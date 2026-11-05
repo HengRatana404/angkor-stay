@@ -15,6 +15,9 @@ import '../rooms/room_types_provider.dart';
 import '../widgets/card_formatters.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/room_photo.dart';
+import '../core/theme.dart';
+import '../widgets/motion.dart';
+import '../widgets/angkor_app_bar.dart';
 
 /// Where the guest is while paying.
 enum _Step {
@@ -57,7 +60,8 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
   // there. We never compare with the phone's clock, which may be wrong.
   final _stopwatch = clock.stopwatch()..start();
   late int _startSeconds = widget.booking.holdSecondsLeft ?? 0;
-  late int _totalSeconds = _startSeconds > 0 ? _startSeconds : _firstHoldSeconds;
+  late int _totalSeconds =
+      _startSeconds > 0 ? _startSeconds : _firstHoldSeconds;
   Timer? _timer;
 
   bool _busy = false;
@@ -141,12 +145,17 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
         final kept = _kept;
         _backToRooms();
         messenger.showSnackBar(
-          SnackBar(content: Text(kept ? 'The booking was cancelled.' : 'The room was released.')),
+          SnackBar(
+            content: Text(
+              kept ? 'The booking was cancelled.' : 'The room was released.',
+            ),
+          ),
         );
       });
 
   Future<void> _payAtHotel() => _run(() async {
-        final kept = await ref.read(bookingRepositoryProvider).payAtHotel(_booking.id);
+        final kept =
+            await ref.read(bookingRepositoryProvider).payAtHotel(_booking.id);
         if (!mounted) return;
         _timer?.cancel(); // no countdown any more
         ref.invalidate(roomTypesProvider);
@@ -192,7 +201,8 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
 
   /// The guest wants to pay with a QR code: the server opens the payment and gives us the QR text.
   Future<void> _startQr() => _run(() async {
-        final qr = await ref.read(bookingRepositoryProvider).startQr(_booking.id);
+        final qr =
+            await ref.read(bookingRepositoryProvider).startQr(_booking.id);
         if (!mounted) return;
 
         setState(() {
@@ -212,7 +222,8 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
       _info = null;
     });
     try {
-      final confirmed = await ref.read(bookingRepositoryProvider).verifyPayment(_booking.id);
+      final confirmed =
+          await ref.read(bookingRepositoryProvider).verifyPayment(_booking.id);
       if (!mounted) return;
       _timer?.cancel();
       ref.invalidate(roomTypesProvider);
@@ -260,14 +271,21 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
         if (!didPop) _backToRooms();
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(title),
-          leading: IconButton(icon: const Icon(Icons.close), onPressed: _backToRooms),
-        ),
+        appBar: AngkorAppBar(
+ title: title,
+ leading: IconButton(
+ tooltip: 'Back to rooms',
+ icon: const Icon(Icons.close),
+ onPressed: _backToRooms,
+ ),
+ ),
         body: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+            if (_error != null) ...[
+              ErrorBanner(_error!),
+              const SizedBox(height: 16),
+            ],
             if (_info != null) ...[
               Text(_info!, key: const Key('info'), textAlign: TextAlign.center),
               const SizedBox(height: 16),
@@ -289,7 +307,10 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
   }
 
   List<Widget> _actions(ThemeData theme) {
-    final backButton = FilledButton(onPressed: _backToRooms, child: const Text('Back to rooms'));
+    final backButton = FilledButton(
+      onPressed: _backToRooms,
+      child: const Text('Back to rooms'),
+    );
 
     if (_paid) return [backButton];
 
@@ -325,113 +346,269 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
   Widget _countdownCard(ThemeData theme, Booking b) {
     final progress = (_remaining / _totalSeconds).clamp(0.0, 1.0);
 
-    return Card(
-      color: _expired ? theme.colorScheme.errorContainer : theme.colorScheme.secondaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(_expired ? Icons.timer_off_outlined : Icons.timer_outlined, size: 40),
-            const SizedBox(height: 8),
-            Text(
-              _expired ? 'Hold ran out' : formatCountdown(_remaining),
-              key: const Key('countdown'),
-              style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _expired
-                  ? 'The room is free again. You can book it again.'
-                  : 'Room ${b.roomNumber} is kept for you. Please finish before the time runs out.',
-              textAlign: TextAlign.center,
-            ),
-            if (!_expired) ...[
-              const SizedBox(height: 12),
-              LinearProgressIndicator(value: progress),
-            ],
-          ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _expired ? context.pal.dangerWash : context.pal.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: _expired ? context.pal.dangerBorder : context.pal.border,
+          width: 1.2,
         ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _expired ? context.pal.dangerWash : context.pal.goldWash,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _expired ? Icons.timer_off_outlined : Icons.timer_outlined,
+              size: 28,
+              color: _expired ? context.pal.danger : context.pal.accent,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _expired ? 'Hold ran out' : formatCountdown(_remaining),
+            key: const Key('countdown'),
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              fontFamily: 'serif',
+              color: (_remaining <= 60 && !_expired) ? context.pal.danger : context.pal.text,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _expired
+                ? 'The room is free again. You can book it again.'
+                : 'Room ${b.roomNumber} is kept for you. Please finish before the time runs out.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: _expired ? context.pal.danger : context.pal.textMuted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (!_expired) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: progress),
+                duration: reduceMotion(context) ? Duration.zero : const Duration(milliseconds: 400),
+                builder: (context, v, _) => LinearProgressIndicator(
+                  value: v,
+                  minHeight: 6,
+                  backgroundColor: context.pal.surfaceAlt,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    _remaining <= 60 ? context.pal.danger : context.pal.accent,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
   Widget _paidCard(ThemeData theme, Booking b) {
-    final how = b.paymentDetail == null ? 'online' : 'online with ${b.paymentDetail}';
+    final how =
+        b.paymentDetail == null ? 'online' : 'online with ${b.paymentDetail}';
 
-    return Card(
+    return Container(
       key: const Key('paid-card'),
-      color: Colors.green.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(Icons.verified_outlined, size: 40, color: Colors.green.shade700),
-            const SizedBox(height: 8),
-            Text('Room ${b.roomNumber} is yours', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            const Text('Your booking number', style: TextStyle(fontSize: 13)),
-            Text(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: context.pal.successWash,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.pal.successBorder, width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: context.pal.successWash,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.verified_outlined,
+              size: 36,
+              color: context.pal.success,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Room ${b.roomNumber} is yours',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: context.pal.success,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Your booking number',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.pal.success,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: context.pal.strong,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
               b.code,
               key: const Key('booking-code'),
-              style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 2),
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+                color: context.pal.accent,
+                fontFamily: 'serif',
+              ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Paid ${formatMoney(b.toPay)} $how.'
-              '${b.hasDiscount ? ' You saved ${formatMoney(b.discountAmount)} (${b.discountPercent}% off).' : ''}',
-              key: const Key('paid-text'),
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Paid ${formatMoney(b.toPay)} $how.'
+            '${b.hasDiscount ? ' You saved ${formatMoney(b.discountAmount)} (${b.discountPercent}% off).' : ''}',
+            key: const Key('paid-text'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.pal.success,
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Show this number at the front desk when you arrive.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Show this number at the front desk when you arrive.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: context.pal.success),
+          ),
+        ],
       ),
     );
   }
 
   Widget _keptCard(ThemeData theme, Booking b) {
-    return Card(
+    return Container(
       key: const Key('kept-card'),
-      color: Colors.green.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(Icons.check_circle_outline, size: 40, color: Colors.green.shade700),
-            const SizedBox(height: 8),
-            Text('Room ${b.roomNumber} is yours', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            const Text('Your booking number', style: TextStyle(fontSize: 13)),
-            Text(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: context.pal.goldWash,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.pal.goldSoft, width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          PopIn(child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: context.pal.goldSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.check_circle_outline,
+              size: 36,
+              color: context.pal.accent,
+            ),
+          )),
+          const SizedBox(height: 12),
+          Text(
+            'Room ${b.roomNumber} is yours',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: context.pal.text,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Your booking number',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.pal.goldDeep,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: context.pal.strong,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
               b.code,
               key: const Key('booking-code'),
-              style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 2),
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+                color: context.pal.accent,
+                fontFamily: 'serif',
+              ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Tell this number at the front desk. You pay ${formatMoney(b.totalPrice)} when you arrive.',
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Tell this number at the front desk. You pay ${formatMoney(b.totalPrice)} when you arrive.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.pal.text,
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Paying at the hotel has no discount.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Paying at the hotel has no discount.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: context.pal.goldDeep),
+          ),
+        ],
       ),
     );
   }
 
   /// The price after the online discount, from the public setting. The server sets the real one.
   double get _onlineDue {
-    final percent = ref.watch(publicSettingsProvider).value?.onlineDiscountPercent ?? 0;
+    final percent =
+        ref.watch(publicSettingsProvider).value?.onlineDiscountPercent ?? 0;
     return onlinePrice(_booking.totalPrice, percent).due;
   }
 
@@ -443,7 +620,10 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
           ? const SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
             )
           : Text('Pay ${formatMoney(_onlineDue)}'),
     );
@@ -478,7 +658,10 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
               key: const Key('card-holder'),
               controller: _holder,
               textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(labelText: 'Name on the card', errorText: _fieldErrors['holder']),
+              decoration: InputDecoration(
+                labelText: 'Name on the card',
+                errorText: _fieldErrors['holder'],
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -505,8 +688,14 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
                     controller: _cvv,
                     keyboardType: TextInputType.number,
                     obscureText: true,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
-                    decoration: InputDecoration(labelText: 'CVV', errorText: _fieldErrors['cvv']),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'CVV',
+                      errorText: _fieldErrors['cvv'],
+                    ),
                   ),
                 ),
               ],
@@ -528,98 +717,200 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
     final qr = _qr;
     if (qr == null) return const SizedBox.shrink();
 
-    return Card(
+    return Container(
       key: const Key('qr-card'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Scan to pay', style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
-            const SizedBox(height: 4),
-            Text(
-              'Open your banking app and scan this KHQR code.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                color: Colors.white,
-                padding: const EdgeInsets.all(12),
-                child: QrImageView(key: const Key('qr-image'), data: qr.payload, size: 220),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.pal.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.pal.border, width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE11D48),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'KHQR',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Scan to pay',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: context.pal.text,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Open your banking app and scan this KHQR code.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: context.pal.textMuted),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: context.pal.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: context.pal.border, width: 1.2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x08000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: QrImageView(
+                key: const Key('qr-image'),
+                data: qr.payload,
+                size: 210,
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              formatMoney(qr.amount),
-              key: const Key('qr-amount'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            formatMoney(qr.amount),
+            key: const Key('qr-amount'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: context.pal.text,
+              fontFamily: 'serif',
             ),
-            Text(
-              '${qr.merchant} · ${qr.reference}',
-              key: const Key('qr-reference'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${qr.merchant} · ${qr.reference}',
+            key: const Key('qr-reference'),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: context.pal.textMuted),
+          ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            key: const Key('copy-qr'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: qr.payload));
+              if (mounted) {
+                setState(() => _info = 'The text of the QR code was copied.');
+              }
+            },
+            icon: Icon(Icons.copy, size: 16, color: context.pal.accent),
+            label: Text(
+              'Copy the code text',
+              style: TextStyle(color: context.pal.accent, fontWeight: FontWeight.w600),
             ),
-            TextButton.icon(
-              key: const Key('copy-qr'),
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: qr.payload));
-                if (mounted) setState(() => _info = 'The text of the QR code was copied.');
-              },
-              icon: const Icon(Icons.copy, size: 18),
-              label: const Text('Copy the code text'),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Practice payment: no money moves. Tap the button when you are done.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            key: const Key('check-payment'),
+            onPressed: _busy ? null : _verify,
+            style: FilledButton.styleFrom(
+              backgroundColor: context.pal.action,
+              foregroundColor: context.pal.onAction,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Practice payment: no money moves. Tap the button when you are done.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const Key('check-payment'),
-              onPressed: _busy ? null : _verify,
-              child: _busy
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('I have paid'),
-            ),
-            TextButton(
-              key: const Key('another-way'),
-              onPressed: _busy ? null : _chooseAnotherWay,
-              child: const Text('Choose another way to pay'),
-            ),
-          ],
-        ),
+            child: _busy
+                ? SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: context.pal.accent,
+                    ),
+                  )
+                : const Text(
+                    'I have paid',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+          ),
+          TextButton(
+            key: const Key('another-way'),
+            onPressed: _busy ? null : _chooseAnotherWay,
+            child: const Text('Choose another way to pay'),
+          ),
+        ],
       ),
     );
   }
 
   Widget _summaryCard(ThemeData theme, Booking b) {
-    return Card(
+    return Container(
       clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: context.pal.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.pal.border, width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RoomPhoto(url: b.coverImage, height: 140),
+          RoomPhoto(url: b.coverImage, height: 150),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${b.roomTypeName} · Room ${b.roomNumber}', style: theme.textTheme.titleLarge),
+                Text(
+                  '${b.roomTypeName} · Room ${b.roomNumber}',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: context.pal.text,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 _Line(Icons.login, 'Check-in', formatShortDate(b.checkIn)),
                 _Line(Icons.logout, 'Check-out', formatShortDate(b.checkOut)),
                 _Line(Icons.nights_stay_outlined, 'Nights', '${b.nights}'),
                 _Line(Icons.people_outline, 'Guests', '${b.guests}'),
-                const Divider(height: 24),
+                Divider(height: 20, color: context.pal.border),
                 _Line(
                   Icons.attach_money,
                   '${formatMoney(b.pricePerNight)} × ${nightsText(b.nights)}',
@@ -633,7 +924,13 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
                     '-${formatMoney(b.discountAmount)}',
                     key: const Key('discount-line'),
                   ),
-                  _Line(Icons.payments_outlined, 'To pay', formatMoney(b.toPay), bold: true, key: const Key('to-pay-line')),
+                  _Line(
+                    Icons.payments_outlined,
+                    'To pay',
+                    formatMoney(b.toPay),
+                    bold: true,
+                    key: const Key('to-pay-line'),
+                  ),
                 ],
               ],
             ),
@@ -646,50 +943,204 @@ class _BookingHoldScreenState extends ConsumerState<BookingHoldScreen> {
   // ------------------------------------------------------ the payment choices
 
   List<Widget> _choices(ThemeData theme) {
-    final percent = ref.watch(publicSettingsProvider).value?.onlineDiscountPercent ?? 0;
+    final percent =
+        ref.watch(publicSettingsProvider).value?.onlineDiscountPercent ?? 0;
     final price = onlinePrice(_booking.totalPrice, percent);
     final offer = percent > 0
         ? '${formatMoney(price.due)} instead of ${formatMoney(_booking.totalPrice)}'
         : 'Your room is kept while you pay.';
 
     return [
-      Text('How do you want to pay?', style: theme.textTheme.titleMedium),
-      const SizedBox(height: 8),
+      Text(
+        'How do you want to pay?',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: context.pal.text,
+        ),
+      ),
+      const SizedBox(height: 10),
       Card(
+        elevation: 0.5,
+        margin: const EdgeInsets.only(bottom: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: context.pal.border, width: 1.2),
+        ),
+        color: context.pal.surface,
         child: ListTile(
           key: const Key('pay-card'),
           enabled: !_busy,
-          leading: const Icon(Icons.credit_card),
-          title: Text(percent > 0 ? 'Pay by card and save $percent%' : 'Pay by card'),
-          subtitle: Text(offer),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: _busy ? null : () => setState(() {
-                _step = _Step.card;
-                _error = null;
-              }),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 4,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: context.pal.goldWash,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.credit_card, color: context.pal.accent, size: 22),
+          ),
+          title: Text(
+            percent > 0 ? 'Pay by card and save $percent%' : 'Pay by card',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: context.pal.text,
+            ),
+          ),
+          subtitle: Text(
+            offer,
+            style: TextStyle(fontSize: 13, color: context.pal.textMuted),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (percent > 0)
+                Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.pal.accent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$percent% OFF',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: context.pal.text,
+                    ),
+                  ),
+                ),
+              Icon(Icons.chevron_right, color: context.pal.accent),
+            ],
+          ),
+          onTap: _busy
+              ? null
+              : () => setState(() {
+                    _step = _Step.card;
+                    _error = null;
+                  }),
         ),
       ),
       Card(
+        elevation: 0.5,
+        margin: const EdgeInsets.only(bottom: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: context.pal.border, width: 1.2),
+        ),
+        color: context.pal.surface,
         child: ListTile(
           key: const Key('pay-qr'),
           enabled: !_busy,
-          leading: _busy
-              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.qr_code_2),
-          title: Text(percent > 0 ? 'Pay with a QR code and save $percent%' : 'Pay with a QR code'),
-          subtitle: const Text('Scan with your banking app (KHQR).'),
-          trailing: const Icon(Icons.chevron_right),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 4,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: context.pal.goldWash,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: _busy
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(Icons.qr_code_2, color: context.pal.accent, size: 22),
+          ),
+          title: Text(
+            percent > 0
+                ? 'Pay with a QR code and save $percent%'
+                : 'Pay with a QR code',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: context.pal.text,
+            ),
+          ),
+          subtitle: const Text(
+            'Scan with your banking app (KHQR).',
+            style: TextStyle(fontSize: 13),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (percent > 0)
+                Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.pal.accent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$percent% OFF',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: context.pal.text,
+                    ),
+                  ),
+                ),
+              Icon(Icons.chevron_right, color: context.pal.accent),
+            ],
+          ),
           onTap: _busy ? null : _startQr,
         ),
       ),
       Card(
+        elevation: 0.5,
+        margin: const EdgeInsets.only(bottom: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: context.pal.border, width: 1.2),
+        ),
+        color: context.pal.surface,
         child: ListTile(
           key: const Key('pay-at-hotel'),
           enabled: !_busy,
-          leading: const Icon(Icons.storefront_outlined),
-          title: const Text('Pay at the hotel'),
-          subtitle: const Text('Pay when you arrive. We keep your room. No discount.'),
-          trailing: const Icon(Icons.chevron_right),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 4,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: context.pal.page,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.storefront_outlined,
+              color: context.pal.textMuted,
+              size: 22,
+            ),
+          ),
+          title: Text(
+            'Pay at the hotel',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: context.pal.text,
+            ),
+          ),
+          subtitle: const Text(
+            'Pay when you arrive. We keep your room. No discount.',
+            style: TextStyle(fontSize: 13),
+          ),
+          trailing: Icon(Icons.chevron_right, color: context.pal.accent),
           onTap: _busy ? null : _payAtHotel,
         ),
       ),
@@ -703,7 +1154,13 @@ class _Line extends StatelessWidget {
   final String label;
   final String value;
   final bool bold;
-  const _Line(this.icon, this.label, this.value, {this.bold = false, super.key});
+  const _Line(
+    this.icon,
+    this.label,
+    this.value, {
+    this.bold = false,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {

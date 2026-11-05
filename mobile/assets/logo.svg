@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3E7C4" />
+      <stop offset="35%" stop-color="#D4AF37" />
+      <stop offset="70%" stop-color="#AA7C11" />
+      <stop offset="100%" stop-color="#E5C158" />
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2A221B" />
+      <stop offset="100%" stop-color="#14100C" />
+    </radialGradient>
+  </defs>
+
+  <!-- Background rounded rectangle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGlow)" />
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-opacity="0.3" />
+
+  <!-- The Angkor Stay Emblem -->
+  <g transform="translate(0, 8)" stroke="url(#goldGrad)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    
+    <!-- Central Tower (Prasat Central) -->
+    <!-- Pinnacle Spire -->
+    <line x1="256" y1="84" x2="256" y2="120" stroke-width="4" />
+    <circle cx="256" cy="80" r="4" fill="url(#goldGrad)" stroke="none" />
+    
+    <!-- Main Center Dome / Lotus Bud Outline -->
+    <path d="M 256,120 
+             C 246,140 236,170 236,200 
+             C 236,230 240,260 236,290
+             L 276,290
+             C 272,260 276,230 276,200
+             C 276,170 266,140 256,120 Z" 
+          stroke-width="5" fill="#D4AF37" fill-opacity="0.12" />
+
+    <!-- Center Spire Tiers (Stepped roofs) -->
+    <path d="M 244,165 Q 256,160 268,165" stroke-width="3" />
+    <path d="M 240,200 Q 256,194 272,200" stroke-width="3.5" />
+    <path d="M 237,240 Q 256,232 275,240" stroke-width="3.5" />
+    <path d="M 235,280 Q 256,272 277,280" stroke-width="4" />
+
+    <!-- Left Flanking Tower -->
+    <line x1="168" y1="148" x2="168" y2="175" stroke-width="3.5" />
+    <circle cx="168" cy="144" r="3.5" fill="url(#goldGrad)" stroke="none" />
+    <path d="M 168,175
+             C 160,195 152,220 152,250
+             C 152,275 156,295 152,320
+             L 186,320
+             C 186,295 188,275 188,250
+             C 188,220 178,195 168,175 Z"
+          stroke-width="4.5" fill="#D4AF37" fill-opacity="0.08" />
+    <!-- Left Tiers -->
+    <path d="M 158,215 Q 168,210 178,215" stroke-width="3" />
+    <path d="M 154,250 Q 168,244 182,250" stroke-width="3" />
+    <path d="M 152,285 Q 168,280 184,285" stroke-width="3.5" />
+
+    <!-- Right Flanking Tower -->
+    <line x1="344" y1="148" x2="344" y2="175" stroke-width="3.5" />
+    <circle cx="344" cy="144" r="3.5" fill="url(#goldGrad)" stroke="none" />
+    <path d="M 344,175
+             C 334,195 324,220 324,250
+             C 324,275 326,295 326,320
+             L 360,320
+             C 356,295 360,275 360,250
+             C 360,220 352,195 344,175 Z"
+          stroke-width="4.5" fill="#D4AF37" fill-opacity="0.08" />
+    <!-- Right Tiers -->
+    <path d="M 334,215 Q 344,210 354,215" stroke-width="3" />
+    <path d="M 330,250 Q 344,244 358,250" stroke-width="3" />
+    <path d="M 328,285 Q 344,280 360,285" stroke-width="3.5" />
+
+    <!-- Connecting Gallery Roofs between Towers -->
+    <path d="M 186,305 C 205,300 218,298 236,290" stroke-width="4" />
+    <path d="M 276,290 C 294,298 307,300 326,305" stroke-width="4" />
+
+    <!-- Stepped Temple Terrace Foundation (Kailasa Plinths) -->
+    <!-- Tier 1 -->
+    <path d="M 130,335 L 382,335" stroke-width="5" />
+    <!-- Tier 2 -->
+    <path d="M 112,352 L 400,352" stroke-width="4" />
+    <!-- Tier 3 with decorative stepped return -->
+    <path d="M 96,370 L 416,370" stroke-width="3.5" />
+
+    <!-- Sacred Lotus Petal Base (Blooming Lotus Cradle) -->
+    <!-- Left Petal Sweep -->
+    <path d="M 104,345 C 80,380 95,415 150,425 C 190,432 230,410 256,385" stroke-width="3.5" stroke-opacity="0.8" />
+    <!-- Right Petal Sweep -->
+    <path d="M 408,345 C 432,380 417,415 362,425 C 322,432 282,410 256,385" stroke-width="3.5" stroke-opacity="0.8" />
+    
+    <!-- Central Lotus Calyx / Drop -->
+    <path d="M 256,385 L 256,435" stroke-width="3" />
+    <circle cx="256" cy="438" r="3" fill="url(#goldGrad)" stroke="none" />
+
+  </g>
+</svg>

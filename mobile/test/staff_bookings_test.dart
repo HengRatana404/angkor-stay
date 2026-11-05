@@ -274,6 +274,27 @@ void main() {
       expect(find.text('\$30'), findsNWidgets(2));
     });
 
+    testWidgets('tapping scan opens the QR scanner screen and demo scan works', (tester) async {
+      _tallScreen(tester);
+      final fake = _FakeStaffBookings([_booking(id: 6, guest: 'Test Guest', room: '202')]);
+      await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('open-camera-scanner')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('open-camera-scanner')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scan guest QR'), findsOneWidget);
+      expect(find.byKey(const Key('demo-scan-button')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('demo-scan-button')));
+      await tester.pumpAndSettle();
+
+      // The scan shows who it is, in a sheet, with the action for the chosen mode.
+      expect(find.byKey(const Key('scan-guest')), findsOneWidget);
+      expect(find.text('Test Guest'), findsOneWidget);
+    });
+
     testWidgets('an empty list says so', (tester) async {
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), _FakeStaffBookings([])));
       await tester.pumpAndSettle();

@@ -87,7 +87,8 @@ class AuthController extends Controller
             ->whereNotNull('email_verified_at')
             ->first();
 
-        if ($user && $user->is_active) {
+        // Staff and admin have no real inbox: the admin sets a new password for them.
+        if ($user && $user->is_active && $user->role === 'customer') {
             // If a code was sent a minute ago this does nothing, quietly.
             $this->codes->issue($user->email, EmailCodeService::PURPOSE_RESET);
         }
@@ -144,7 +145,7 @@ class AuthController extends Controller
 
         // Staff and admin can only log in from the hotel network. This is checked
         // after the password, so the message is not shown to someone guessing.
-        if (! $this->settings->mayConnectFrom($user, $request->ip())) {
+        if (! $this->settings->mayConnectFrom($user, $this->settings->effectiveIp($request))) {
             return response()->json([
                 'message' => 'Staff and admin can only log in on the hotel network.',
                 'code' => 'outside_hotel_network',

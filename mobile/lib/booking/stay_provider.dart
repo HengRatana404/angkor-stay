@@ -11,7 +11,11 @@ class Stay {
   final DateTime checkOut;
   final int guests;
 
-  const Stay({required this.checkIn, required this.checkOut, required this.guests});
+  const Stay({
+    required this.checkIn,
+    required this.checkOut,
+    required this.guests,
+  });
 
   int get nights => checkOut.difference(checkIn).inDays;
 
@@ -19,17 +23,21 @@ class Stay {
   String get checkOutText => isoDate(checkOut);
 
   Stay copyWith({DateTime? checkIn, DateTime? checkOut, int? guests}) => Stay(
-        checkIn: checkIn ?? this.checkIn,
-        checkOut: checkOut ?? this.checkOut,
-        guests: guests ?? this.guests,
-      );
+    checkIn: checkIn ?? this.checkIn,
+    checkOut: checkOut ?? this.checkOut,
+    guests: guests ?? this.guests,
+  );
 }
 
 class StayNotifier extends Notifier<Stay> {
   @override
   Stay build() {
     final today = dateOnly(DateTime.now());
-    return Stay(checkIn: today, checkOut: today.add(const Duration(days: 1)), guests: 1);
+    return Stay(
+      checkIn: today,
+      checkOut: today.add(const Duration(days: 1)),
+      guests: 1,
+    );
   }
 
   /// Returns an error text when the dates cannot be used, otherwise null.
@@ -46,6 +54,17 @@ class StayNotifier extends Notifier<Stay> {
 
     state = state.copyWith(checkIn: inDay, checkOut: outDay);
     return null;
+  }
+
+  /// If the saved check-in day has passed (the app stayed open overnight),
+  /// move the same number of nights to start today.
+  void refreshIfStale() {
+    final today = dateOnly(DateTime.now());
+    if (!state.checkIn.isBefore(today)) return;
+    state = state.copyWith(
+      checkIn: today,
+      checkOut: today.add(Duration(days: state.nights)),
+    );
   }
 
   void setGuests(int guests) {

@@ -4,7 +4,10 @@ import 'package:flutter/services.dart';
 /// Only digits are kept, up to 19.
 class CardNumberFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
     final limited = digits.length > 19 ? digits.substring(0, 19) : digits;
 
@@ -15,14 +18,20 @@ class CardNumberFormatter extends TextInputFormatter {
     }
 
     final text = buffer.toString();
-    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 }
 
 /// Writes an expiry date as "MM/YY" while the guest types: the slash comes by itself.
 class ExpiryFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
     final limited = digits.length > 4 ? digits.substring(0, 4) : digits;
 
@@ -32,6 +41,9 @@ class ExpiryFormatter extends TextInputFormatter {
         ? '${limited.substring(0, 2)}/${limited.substring(2)}'
         : limited;
 
-    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 }

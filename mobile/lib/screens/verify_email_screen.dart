@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/auth_provider.dart';
 import '../core/api_error.dart';
 import '../widgets/error_banner.dart';
+import '../widgets/angkor_app_bar.dart';
 
 class VerifyEmailScreen extends ConsumerStatefulWidget {
   final String email;
@@ -93,7 +94,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify your email')),
+      appBar: AngkorAppBar(title: 'Verify your email'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -108,7 +109,10 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 24),
-              if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+              if (_error != null) ...[
+                ErrorBanner(_error!),
+                const SizedBox(height: 16),
+              ],
               if (_info != null) ...[
                 Text(_info!, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
@@ -134,14 +138,21 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Text('Verify'),
               ),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: _wait > 0 || _busy ? null : _resend,
-                child: Text(_wait > 0 ? 'Send a new code in ${_wait}s' : 'Send a new code'),
+                child: Text(
+                  _wait > 0
+                      ? 'Send a new code in ${_wait}s'
+                      : 'Send a new code',
+                ),
               ),
             ],
           ),

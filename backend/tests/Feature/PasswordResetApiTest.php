@@ -36,6 +36,24 @@ class PasswordResetApiTest extends TestCase
         return $code === '000000' ? '111111' : '000000';
     }
 
+    public function test_staff_and_admin_get_no_reset_code_the_admin_resets_for_them(): void
+    {
+        Mail::fake();
+
+        foreach (['staff', 'admin'] as $role) {
+            $user = $this->verifiedUser();
+            $user->forceFill(['role' => $role])->save();
+
+            $this->postJson('/api/auth/forgot-password', ['email' => $user->email])
+                ->assertOk()
+                ->assertJsonPath('message', 'If this email has an account, we sent a 6-digit code.');
+
+            $user->delete();
+        }
+
+        Mail::assertNothingSent();
+    }
+
     public function test_forgot_password_emails_a_reset_code(): void
     {
         Mail::fake();

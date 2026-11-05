@@ -60,7 +60,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     ref.read(authTokenProvider.notifier).set(token);
 
     try {
-      final res = await ref.read(dioProvider).get('/auth/me');
+      final res = await ref.read(dioProvider).get<dynamic>('/auth/me');
       return AppUser.fromJson(res.data['data'] as Map<String, dynamic>);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
@@ -79,7 +79,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     required String passwordConfirmation,
   }) async {
     try {
-      await ref.read(dioProvider).post('/auth/register', data: {
+      await ref.read(dioProvider).post<dynamic>('/auth/register', data: {
         'name': name,
         'email': email,
         'phone': phone,
@@ -95,7 +95,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     try {
       final res = await ref
           .read(dioProvider)
-          .post('/auth/verify-email', data: {'email': email, 'code': code});
+          .post<dynamic>('/auth/verify-email', data: {'email': email, 'code': code});
       await _signIn(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiError.from(e);
@@ -104,7 +104,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
 
   Future<void> resendCode(String email) async {
     try {
-      await ref.read(dioProvider).post('/auth/resend-code', data: {'email': email});
+      await ref.read(dioProvider).post<dynamic>('/auth/resend-code', data: {'email': email});
     } on DioException catch (e) {
       throw ApiError.from(e);
     }
@@ -112,7 +112,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
 
   Future<void> forgotPassword(String email) async {
     try {
-      await ref.read(dioProvider).post('/auth/forgot-password', data: {'email': email});
+      await ref.read(dioProvider).post<dynamic>('/auth/forgot-password', data: {'email': email});
     } on DioException catch (e) {
       throw ApiError.from(e);
     }
@@ -122,7 +122,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     try {
       await ref
           .read(dioProvider)
-          .post('/auth/check-reset-code', data: {'email': email, 'code': code});
+          .post<dynamic>('/auth/check-reset-code', data: {'email': email, 'code': code});
     } on DioException catch (e) {
       throw ApiError.from(e);
     }
@@ -135,7 +135,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     required String passwordConfirmation,
   }) async {
     try {
-      await ref.read(dioProvider).post('/auth/reset-password', data: {
+      await ref.read(dioProvider).post<dynamic>('/auth/reset-password', data: {
         'email': email,
         'code': code,
         'password': password,
@@ -150,7 +150,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     try {
       final res = await ref
           .read(dioProvider)
-          .post('/auth/login', data: {'email': email, 'password': password});
+          .post<dynamic>('/auth/login', data: {'email': email, 'password': password});
       await _signIn(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiError.from(e);
@@ -162,7 +162,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     try {
       final res = await ref
           .read(dioProvider)
-          .patch('/auth/profile', data: {'name': name, 'phone': phone});
+          .patch<dynamic>('/auth/profile', data: {'name': name, 'phone': phone});
       state = AsyncData(AppUser.fromJson(res.data['data'] as Map<String, dynamic>));
     } on DioException catch (e) {
       throw ApiError.from(e);
@@ -175,7 +175,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
     required String confirmation,
   }) async {
     try {
-      await ref.read(dioProvider).post('/auth/change-password', data: {
+      await ref.read(dioProvider).post<dynamic>('/auth/change-password', data: {
         'current_password': current,
         'password': password,
         'password_confirmation': confirmation,
@@ -187,7 +187,7 @@ class AuthNotifier extends AsyncNotifier<AppUser?> {
 
   Future<void> logout() async {
     try {
-      await ref.read(dioProvider).post('/auth/logout');
+      await ref.read(dioProvider).post<dynamic>('/auth/logout');
     } catch (_) {
       // Even if the server cannot be reached, log out on this phone.
     }

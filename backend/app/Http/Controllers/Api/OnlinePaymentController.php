@@ -91,7 +91,7 @@ class OnlinePaymentController extends Controller
     /** A customer can only touch their own booking. The row is locked, so two taps cannot both pay. */
     private function ownBookingLocked(Request $request, int $id): Booking
     {
-        return Booking::where('user_id', $request->user()->id)->lockForUpdate()->findOrFail($id);
+        return Booking::forGuest($request->user()->id)->lockForUpdate()->findOrFail($id);
     }
 
     private function qr(PaymentIntent $intent): array

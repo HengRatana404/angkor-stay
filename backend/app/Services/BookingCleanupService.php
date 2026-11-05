@@ -78,8 +78,6 @@ class BookingCleanupService
     /** @return array{count:int, refunded:float, failed:int} */
     public function markNoShows(Carbon $now): array
     {
-        $time = (string) $this->settings->get('check_out_time'); // "12:00"
-
         $candidates = Booking::whereIn('status', [Booking::STATUS_PENDING, Booking::STATUS_CONFIRMED])
             ->where(fn ($q) => $q->whereNull('hold_expires_at')->orWhere('status', Booking::STATUS_CONFIRMED))
             ->whereDate('check_in_date', '<', $now->toDateString())
@@ -91,15 +89,14 @@ class BookingCleanupService
 
         foreach ($candidates as $id) {
             try {
-                $money = DB::transaction(function () use ($id, $now, $time) {
+                $money = DB::transaction(function () use ($id, $now) {
                     $booking = Booking::lockForUpdate()->find($id);
 
                     if (! $booking || ! in_array($booking->status, [Booking::STATUS_PENDING, Booking::STATUS_CONFIRMED], true)) {
                         return null;
                     }
 
-                    $cutoff = Carbon::parse($booking->check_in_date->toDateString() . ' ' . $time, $now->getTimezone())->addDay();
-                    if ($now->lt($cutoff)) {
+                    if ($now->lt($booking->noShowCutoff())) {
                         return null;
                     }
 
@@ -112,6 +109,11 @@ class BookingCleanupService
             } catch (PaymentException $e) {
                 $failed++;
                 Log::critical("NO-SHOW REFUND FAILED for booking {$id}: " . $e->getMessage());
+                continue;
+            } catch (\Throwable $e) {
+                // Anything else (a database hiccup, a bad setting): log it and carry on with the other bookings.
+                $failed++;
+                Log::error("NO-SHOW CLEAN-UP FAILED for booking {$id}: " . $e->getMessage());
                 continue;
             }
 

@@ -13,3 +13,17 @@ CLAUDE.md
 PROBLEM.md
 TODO.md
 DONE.md
+
+# Postman app folders created when the project folder is opened in Postman
+.postman/
+postman/collections/
+postman/documents/
+postman/environments/
+postman/flows/
+postman/globals/
+postman/mocks/
+postman/specs/
+
+# Machine-specific files (tunnel address, local paths): stay on this PC
+start-hotel-server.bat
+scratch/

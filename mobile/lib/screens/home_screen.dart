@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../auth/auth_provider.dart';
 import '../core/api_client.dart';
-import '../core/server_address_dialog.dart';
 import '../models/app_user.dart';
 import '../rooms/room_types_provider.dart';
 import '../widgets/error_banner.dart';
-import 'my_bookings_screen.dart';
-import 'profile_screen.dart';
 import '../widgets/room_type_card.dart';
-import '../widgets/stay_card.dart';
+import '../core/theme.dart';
+import '../widgets/motion.dart';
+import '../widgets/angkor_app_bar.dart';
+import '../widgets/notifications_sheet.dart';
 
 class HomeScreen extends ConsumerWidget {
   final AppUser user;
@@ -30,104 +29,135 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final health = ref.watch(healthProvider);
     final rooms = ref.watch(roomTypesProvider);
-    final baseUrl = ref.watch(baseUrlProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Angkor Stay'),
-        actions: [
-          IconButton(
-            tooltip: 'My bookings',
-            icon: const Icon(Icons.receipt_long),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute<void>(builder: (_) => const MyBookingsScreen())),
-          ),
-          IconButton(
-            tooltip: 'My profile',
-            icon: const Icon(Icons.person),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute<void>(builder: (_) => const ProfileScreen())),
-          ),
-          IconButton(
-            tooltip: 'Server address',
-            icon: const Icon(Icons.settings),
-            onPressed: () async {
-              if (await showServerAddressDialog(context, ref)) {
-                await _refresh(ref);
-              }
-            },
-          ),
-          IconButton(
-            tooltip: 'Log out',
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authProvider.notifier).logout(),
-          ),
-        ],
+      appBar: AngkorAppBar(
+        title: 'Angkor Stay',
+        showLogo: true,
+        showBack: false,
+        actions: [const NotificationBell()],
       ),
       body: RefreshIndicator(
         onRefresh: () => _refresh(ref),
-        child: ListView(
+        child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text('Hello, ${user.name}', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                Chip(label: Text(user.role.toUpperCase())),
-                Chip(label: Text(user.email)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                dense: true,
-                leading: health.when(
-                  loading: () => const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  error: (_, _) => const Icon(Icons.error, color: Colors.red),
-                  data: (h) => Icon(
-                    h.ok ? Icons.check_circle : Icons.error,
-                    color: h.ok ? Colors.green : Colors.red,
-                  ),
-                ),
-                title: Text(health.maybeWhen(
-                  data: (h) => h.ok ? 'Connected' : 'Not connected',
-                  orElse: () => 'Checking...',
-                )),
-                subtitle: Text(baseUrl),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const StayCard(),
-            const SizedBox(height: 24),
-            Text('Our rooms', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            rooms.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (error, _) => Column(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  ErrorBanner('$error'),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: () => ref.invalidate(roomTypesProvider),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hello, ${user.name}',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: context.pal.text,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Welcome to Siem Reap',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.pal.textMuted,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-              data: (list) => list.isEmpty
-                  ? const Text('No rooms yet.')
-                  : Column(children: [for (final t in list) RoomTypeCard(roomType: t)]),
-            ),
-          ],
+              // Only shown when the connection is down.
+              if (health.maybeWhen(data: (h) => !h.ok, orElse: () => false))
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.pal.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: context.pal.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: health.maybeWhen(
+                              data: (h) =>
+                                  h.ok ? Colors.green : context.pal.danger,
+                              orElse: () => Colors.amber,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          health.maybeWhen(
+                            data: (h) => h.ok ? 'Online' : 'Offline',
+                            orElse: () => 'Connecting...',
+                          ),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.pal.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 20),
+              Text(
+                'Our rooms',
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold, fontSize: 20),
+              ),
+              const SizedBox(height: 12),
+              rooms.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, _) => Column(
+                  children: [
+                    ErrorBanner('$error'),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: () => ref.invalidate(roomTypesProvider),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+                data: (list) => list.isEmpty
+                    ? const Text('No rooms yet.')
+                    : Column(
+                        children: [
+                          for (final (i, t) in list.indexed)
+                            FadeSlideIn(
+                              index: i,
+                              child: RoomTypeCard(roomType: t),
+                            ),
+                        ],
+                      ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );

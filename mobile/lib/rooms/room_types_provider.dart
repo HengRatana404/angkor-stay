@@ -11,7 +11,7 @@ final roomTypesProvider = FutureProvider.autoDispose<List<RoomType>>((ref) async
   final stay = ref.watch(stayProvider);
 
   try {
-    final res = await ref.watch(dioProvider).get('/room-types', queryParameters: {
+    final res = await ref.watch(dioProvider).get<dynamic>('/room-types', queryParameters: {
       'check_in_date': stay.checkInText,
       'check_out_date': stay.checkOutText,
     });

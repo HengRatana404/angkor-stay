@@ -72,6 +72,19 @@ class SettingsService
     }
 
     /**
+     * The address the visitor really connects from.
+     *
+     * Only the web server's own socket is believed, plus the forwarding header of a tunnel
+     * program running on this same PC (ngrok, cloudflared): bootstrap/app.php trusts proxies
+     * at 127.0.0.1 only. Headers sent by a client (CF-Connecting-IP, X-Forwarded-For) are never
+     * trusted by themselves, so nobody can claim to be on the hotel network.
+     */
+    public function effectiveIp(\Illuminate\Http\Request $request): string
+    {
+        return $request->ip();
+    }
+
+    /**
      * May this user use the app from this address?
      * Customers can connect from anywhere. Staff and admin only from
      * the hotel network, unless the admin switched that rule off.

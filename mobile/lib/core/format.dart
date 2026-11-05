@@ -69,3 +69,16 @@ String formatCountdown(int seconds) {
   final s = seconds < 0 ? 0 : seconds;
   return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
 }
+
+/// Formats a luxury booking confirmation reference, e.g. "AS-2026-0006".
+/// Keeps compatibility with existing raw IDs and strings.
+String formatConfirmationCode(int id) {
+  final padded = id.toString().padLeft(4, '0');
+  return 'AS-2026-$padded';
+}
+
+/// "CONFIRMATION #AS-2026-0006"
+String fullConfirmationLabel(int id) => 'CONFIRMATION #${formatConfirmationCode(id)}';
+
+/// 'admin' becomes 'Admin'. Used for role labels (no all-caps tracked text).
+String titleCase(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);

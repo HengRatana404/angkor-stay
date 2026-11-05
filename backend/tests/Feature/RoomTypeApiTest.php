@@ -99,6 +99,15 @@ class RoomTypeApiTest extends TestCase
         $this->getJson('/api/room-types/999')->assertNotFound();
     }
 
+    public function test_a_room_type_id_that_is_not_a_number_is_404_not_a_server_error(): void
+    {
+        // Found by the stress test: "abc" used to reach the database and give a 500.
+        $this->getJson('/api/room-types/abc')->assertNotFound();
+        $this->getJson('/api/room-types/1%20OR%201=1')->assertNotFound();
+        // A number too big for the database used to give a 500 as well.
+        $this->getJson('/api/room-types/99999999999999999999')->assertNotFound();
+    }
+
     public function test_a_room_type_with_rooms_cannot_be_deleted(): void
     {
         $this->seed(RoomSeeder::class);

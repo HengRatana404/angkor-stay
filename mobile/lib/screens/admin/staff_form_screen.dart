@@ -5,6 +5,7 @@ import '../../admin/admin_repository.dart';
 import '../../core/api_error.dart';
 import '../../models/staff_member.dart';
 import '../../widgets/error_banner.dart';
+import '../../widgets/angkor_app_bar.dart';
 
 /// Add a staff member, or (when [member] is given) change one.
 class StaffFormScreen extends ConsumerStatefulWidget {
@@ -67,9 +68,15 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-      messenger.showSnackBar(SnackBar(
-        content: Text(_editing ? 'Staff account saved.' : 'Staff account made. They can log in now.'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            _editing
+                ? 'Staff account saved.'
+                : 'Staff account made. They can log in now.',
+          ),
+        ),
+      );
     } on ApiError catch (e) {
       if (!mounted) return;
       setState(() {
@@ -85,7 +92,7 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_editing ? 'Staff account' : 'Add staff')),
+      appBar: AngkorAppBar(title: _editing ? 'Staff account' : 'Add staff'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -94,7 +101,10 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 16)],
+                if (_error != null) ...[
+                  ErrorBanner(_error!),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   key: const Key('staff-name'),
                   controller: _name,
@@ -104,8 +114,9 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.person_outline),
                   ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Enter a name' : _server('name'),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Enter a name'
+                      : _server('name'),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -117,10 +128,13 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
                     labelText: 'Email',
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.email_outlined),
-                    helperText: _editing ? 'The email cannot be changed' : 'Used to log in',
+                    helperText: _editing
+                        ? 'The email cannot be changed'
+                        : 'Used to log in',
                   ),
-                  validator: (v) =>
-                      (v == null || !v.contains('@')) ? 'Enter a valid email' : _server('email'),
+                  validator: (v) => (v == null || !v.contains('@'))
+                      ? 'Enter a valid email'
+                      : _server('email'),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -142,7 +156,9 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
                   controller: _password,
                   obscureText: _hide,
                   decoration: InputDecoration(
-                    labelText: _editing ? 'New password (leave empty to keep)' : 'Password',
+                    labelText: _editing
+                        ? 'New password (leave empty to keep)'
+                        : 'Password',
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.lock_outline),
                     helperText: _editing
@@ -150,7 +166,10 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
                         : 'At least 8 characters. Tell it to the staff member.',
                     helperMaxLines: 2,
                     suffixIcon: IconButton(
-                      icon: Icon(_hide ? Icons.visibility : Icons.visibility_off),
+                      tooltip: _hide ? 'Show password' : 'Hide password',
+                      icon: Icon(
+                        _hide ? Icons.visibility : Icons.visibility_off,
+                      ),
                       onPressed: () => setState(() => _hide = !_hide),
                     ),
                   ),
@@ -169,7 +188,10 @@ class _StaffFormScreenState extends ConsumerState<StaffFormScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : Text(_editing ? 'Save' : 'Make account'),
                 ),
