@@ -12,6 +12,7 @@ import '../widgets/error_banner.dart';
 import '../widgets/motion.dart';
 import '../widgets/room_photo.dart';
 import '../widgets/status_chip.dart';
+import 'booking_hold_screen.dart';
 
 bool _isEnded(String status) =>
     status == 'cancelled' || status == 'no_show' || status == 'checked_out';
@@ -480,6 +481,39 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
     }
   }
 
+  /// Open the pay screen again for a room that is still held.
+  Future<void> _pay() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      // Ask the server again: the hold may have run out in the meantime.
+      final fresh = (await ref.read(bookingRepositoryProvider).mine())
+          .where((x) => x.id == _booking.id)
+          .firstOrNull;
+      if (fresh == null) return;
+      if (!mounted) return;
+      setState(() => _booking = fresh);
+      if (fresh.status == 'pending' && (fresh.holdSecondsLeft ?? 0) > 0) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BookingHoldScreen(booking: fresh),
+          ),
+        );
+        ref.invalidate(myBookingsProvider);
+        if (mounted) Navigator.of(context).pop();
+      } else {
+        ref.invalidate(myBookingsProvider);
+        setState(() => _error = 'This room is no longer held.');
+      }
+    } on ApiError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _delete() async {
     setState(() {
       _busy = true;
@@ -518,6 +552,23 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
           if (_error != null) ...[
             const SizedBox(height: 16),
             ErrorBanner(_error!),
+          ],
+          if (b.status == 'pending' &&
+              !b.paid &&
+              (b.holdSecondsLeft ?? 0) > 0) ...[
+            const SizedBox(height: 22),
+            FilledButton.icon(
+              key: const Key('pay-now'),
+              onPressed: _busy ? null : _pay,
+              icon: const Icon(Icons.payments_outlined),
+              label: Text(_busy ? 'Please wait...' : 'Pay now'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
           ],
           if (b.canCancel) ...[
             const SizedBox(height: 22),
@@ -620,26 +671,6 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                         CrossAxisAlignment.start,
                       ),
                     ),
-                    Container(
-                      margin: const EdgeInsets.only(top: 6),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: pal.goldWash,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: pal.goldSoft),
-                      ),
-                      child: Text(
-                        nightsText(b.nights),
-                        style: TextStyle(
-                          color: pal.goldDeep,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
                     Expanded(
                       child: _when(
                         context,
@@ -661,6 +692,26 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: pal.text,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: pal.goldWash,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: pal.goldSoft),
+                      ),
+                      child: Text(
+                        nightsText(b.nights),
+                        style: TextStyle(
+                          color: pal.goldDeep,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ],

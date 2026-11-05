@@ -17,6 +17,7 @@ Booking _b({
   String? method = 'online',
   bool canCancel = true,
   double refunded = 0,
+  int? hold,
 }) => Booking(
   id: id,
   code: 'AS-000$id',
@@ -30,7 +31,7 @@ Booking _b({
   guests: 1,
   pricePerNight: 15,
   totalPrice: 30,
-  holdSecondsLeft: null,
+  holdSecondsLeft: hold,
   paid: paid,
   paymentMethod: method,
   canCancel: canCancel,
@@ -190,6 +191,28 @@ void main() {
     );
     expect(find.text('Cancel booking'), findsNothing);
     expect(find.textContaining('front desk'), findsWidgets);
+  });
+
+  testWidgets('a held, unpaid booking has a Pay now button', (tester) async {
+    await _pump(
+      tester,
+      BookingDetailScreen(
+        booking: _b(
+          status: 'pending',
+          paid: false,
+          method: null,
+          canCancel: true,
+          hold: 120,
+        ),
+      ),
+      _Repo([]),
+    );
+    expect(find.byKey(const Key('pay-now')), findsOneWidget);
+  });
+
+  testWidgets('a paid booking has no Pay now button', (tester) async {
+    await _pump(tester, BookingDetailScreen(booking: _b()), _Repo([]));
+    expect(find.byKey(const Key('pay-now')), findsNothing);
   });
 
   group('deleting a finished booking', () {
