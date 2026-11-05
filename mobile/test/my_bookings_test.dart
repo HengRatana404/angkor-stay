@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:angkor_stay/core/api_client.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:angkor_stay/widgets/notifications_sheet.dart';
+import 'package:angkor_stay/core/auto_refresh.dart';
 
 Booking _b({
   int id = 1,
@@ -45,11 +46,14 @@ class _Repo extends BookingRepository {
   ApiError? cancelError;
   final cancelled = <int>[];
   final deleted = <int>[];
+  int loads = 0;
   ApiError? deleteError;
 
   @override
-  Future<List<Booking>> mine() async =>
-      list.where((b) => !deleted.contains(b.id)).toList();
+  Future<List<Booking>> mine() async {
+    loads++;
+    return list.where((b) => !deleted.contains(b.id)).toList();
+  }
 
   @override
   Future<void> delete(int bookingId) async {
@@ -228,6 +232,52 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(BookingDetailScreen), findsOneWidget);
   });
+
+  testWidgets(
+    'signed in: the list refreshes by itself, signed out: it does not',
+    (tester) async {
+      for (final token in ['abc', null]) {
+        final repo = _Repo([_b()]);
+        tester.view.physicalSize = const Size(800, 3000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        await tester.pumpWidget(
+          ProviderScope(
+            retry: (c, e) => null,
+            overrides: [
+              bookingRepositoryProvider.overrideWithValue(repo),
+              sharedPreferencesProvider.overrideWithValue(prefs),
+            ],
+            child: Consumer(
+              builder: (context, ref, _) {
+                // Set the sign-in state once, then show the list.
+                if (ref.read(authTokenProvider) != token) {
+                  Future.microtask(
+                    () => ref.read(authTokenProvider.notifier).set(token),
+                  );
+                }
+                return const MaterialApp(
+                  home: AutoRefresh(child: MyBookingsScreen()),
+                );
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = repo.loads;
+        await tester.pump(const Duration(seconds: 16));
+        await tester.pumpAndSettle();
+        if (token != null) {
+          expect(repo.loads, greaterThan(first), reason: 'signed in');
+        } else {
+          expect(repo.loads, first, reason: 'signed out');
+        }
+        await tester.pumpWidget(const SizedBox());
+      }
+    },
+  );
 
   group('deleting a finished booking', () {
     Booking cancelled() => _b(

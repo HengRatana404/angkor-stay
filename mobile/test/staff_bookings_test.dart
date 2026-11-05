@@ -15,8 +15,20 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _staffUser = AppUser(id: 2, name: 'Front Desk', email: 'staff@angkorstay.test', phone: '085000002', role: 'staff');
-const _adminUser = AppUser(id: 1, name: 'Hotel Admin', email: 'admin@angkorstay.test', phone: '085000001', role: 'admin');
+const _staffUser = AppUser(
+  id: 2,
+  name: 'Front Desk',
+  email: 'staff@angkorstay.test',
+  phone: '085000002',
+  role: 'staff',
+);
+const _adminUser = AppUser(
+  id: 1,
+  name: 'Hotel Admin',
+  email: 'admin@angkorstay.test',
+  phone: '085000001',
+  role: 'admin',
+);
 const _frontDesk = Person(2, 'Front Desk');
 
 /// Makes a booking the way the server would describe it.
@@ -62,14 +74,35 @@ StaffBooking _booking({
     checkedInBy: checkedInBy,
     checkedOutAt: checkedOutBy == null ? null : DateTime.utc(2026, 11, 3, 4),
     checkedOutBy: checkedOutBy,
-    actions: actions ??
-        const BookingActions(canTakePayment: true, canCheckIn: false, checkInProblem: 'Take payment first.', canCheckOut: false),
+    actions:
+        actions ??
+        const BookingActions(
+          canTakePayment: true,
+          canCheckIn: false,
+          checkInProblem: 'Take payment first.',
+          canCheckOut: false,
+        ),
   );
 }
 
-const _canCheckIn = BookingActions(canTakePayment: false, canCheckIn: true, checkInProblem: null, canCheckOut: false);
-const _canCheckOut = BookingActions(canTakePayment: false, canCheckIn: false, checkInProblem: 'This guest is already checked in.', canCheckOut: true);
-const _nothing = BookingActions(canTakePayment: false, canCheckIn: false, checkInProblem: 'This guest already checked out.', canCheckOut: false);
+const _canCheckIn = BookingActions(
+  canTakePayment: false,
+  canCheckIn: true,
+  checkInProblem: null,
+  canCheckOut: false,
+);
+const _canCheckOut = BookingActions(
+  canTakePayment: false,
+  canCheckIn: false,
+  checkInProblem: 'This guest is already checked in.',
+  canCheckOut: true,
+);
+const _nothing = BookingActions(
+  canTakePayment: false,
+  canCheckIn: false,
+  checkInProblem: 'This guest already checked out.',
+  canCheckOut: false,
+);
 
 /// A server that answers from memory, filters like the real one, and
 /// changes the booking like the real one when staff act.
@@ -94,7 +127,8 @@ class _FakeStaffBookings extends StaffBookingRepository {
     }
   }
 
-  void _replace(StaffBooking b) => items = [for (final i in items) i.id == b.id ? b : i];
+  void _replace(StaffBooking b) =>
+      items = [for (final i in items) i.id == b.id ? b : i];
 
   StaffBooking _find(int id) => items.firstWhere((b) => b.id == id);
 
@@ -106,8 +140,13 @@ class _FakeStaffBookings extends StaffBookingRepository {
     return items.where((b) {
       if (status != null && b.status != status) return false;
       if (term.isEmpty) return true;
-      return [b.code, b.guestName, b.roomNumber, b.guest?.phone ?? '', b.guest?.email ?? '']
-          .any((text) => text.toLowerCase().contains(term));
+      return [
+        b.code,
+        b.guestName,
+        b.roomNumber,
+        b.guest?.phone ?? '',
+        b.guest?.email ?? '',
+      ].any((text) => text.toLowerCase().contains(term));
     }).toList();
   }
 
@@ -129,9 +168,21 @@ class _FakeStaffBookings extends StaffBookingRepository {
       checkIn: old.checkIn,
       actions: checkInOpensAfterPayment
           ? _canCheckIn
-          : const BookingActions(canTakePayment: false, canCheckIn: false, checkInProblem: 'Check-in opens on Mon 9 Nov.', canCheckOut: false),
+          : const BookingActions(
+              canTakePayment: false,
+              canCheckIn: false,
+              checkInProblem: 'Check-in opens on Mon 9 Nov.',
+              canCheckOut: false,
+            ),
       payments: [
-        StaffPayment(id: 1, amount: old.totalPrice, method: method, status: 'paid', receivedBy: _frontDesk, paidAt: DateTime.utc(2026, 11, 2, 3)),
+        StaffPayment(
+          id: 1,
+          amount: old.totalPrice,
+          method: method,
+          status: 'paid',
+          receivedBy: _frontDesk,
+          paidAt: DateTime.utc(2026, 11, 2, 3),
+        ),
       ],
     );
     _replace(paid);
@@ -195,11 +246,14 @@ Future<List<Override>> _overrides(_FakeStaffBookings fake) async {
     sharedPreferencesProvider.overrideWithValue(prefs),
     tokenStoreProvider.overrideWithValue(MemoryTokenStore()),
     staffBookingRepositoryProvider.overrideWithValue(fake),
-    healthProvider.overrideWith((ref) async => const HealthStatus(true, 'API connected')),
+    healthProvider.overrideWith(
+      (ref) async => const HealthStatus(true, 'API connected'),
+    ),
   ];
 }
 
-Future<Widget> _screen(Widget screen, _FakeStaffBookings fake) async => ProviderScope(
+Future<Widget> _screen(Widget screen, _FakeStaffBookings fake) async =>
+    ProviderScope(
       retry: (retryCount, error) => null,
       overrides: await _overrides(fake),
       child: MaterialApp(home: screen),
@@ -213,9 +267,13 @@ class _FakeAuth extends AuthNotifier {
   Future<AppUser?> build() async => user;
 }
 
-Future<Widget> _appAs(AppUser user, _FakeStaffBookings fake) async => ProviderScope(
+Future<Widget> _appAs(AppUser user, _FakeStaffBookings fake) async =>
+    ProviderScope(
       retry: (retryCount, error) => null,
-      overrides: [...await _overrides(fake), authProvider.overrideWith(() => _FakeAuth(user))],
+      overrides: [
+        ...await _overrides(fake),
+        authProvider.overrideWith(() => _FakeAuth(user)),
+      ],
       child: const AngkorStayApp(),
     );
 
@@ -224,10 +282,16 @@ void main() {
     testWidgets('staff and admin both get the Bookings tile', (tester) async {
       for (final user in [_staffUser, _adminUser]) {
         _tallScreen(tester);
-        await tester.pumpWidget(await _appAs(user, _FakeStaffBookings([_booking()])));
+        await tester.pumpWidget(
+          await _appAs(user, _FakeStaffBookings([_booking()])),
+        );
         await tester.pumpAndSettle();
 
-        expect(find.byKey(const Key('tile-bookings')), findsOneWidget, reason: user.role);
+        expect(
+          find.byKey(const Key('tile-bookings')),
+          findsOneWidget,
+          reason: user.role,
+        );
 
         await tester.pumpWidget(const SizedBox());
       }
@@ -244,7 +308,9 @@ void main() {
 
     testWidgets('the Bookings tile opens the list', (tester) async {
       _tallScreen(tester);
-      await tester.pumpWidget(await _appAs(_staffUser, _FakeStaffBookings([_booking()])));
+      await tester.pumpWidget(
+        await _appAs(_staffUser, _FakeStaffBookings([_booking()])),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('tile-bookings')));
@@ -255,56 +321,136 @@ void main() {
     });
   });
 
-  group('booking list', () {
-    testWidgets('shows the code, room, guest, dates, status, price and a Paid chip', (tester) async {
+  group('check in and out from the list (no QR scan)', () {
+    testWidgets('a checked-in guest can be checked out from the list', (
+      tester,
+    ) async {
       _tallScreen(tester);
       final fake = _FakeStaffBookings([
-        _booking(id: 1, guest: 'Sok Dara', room: '101'),
-        _booking(id: 2, guest: 'Chan Vanna', room: '202', status: 'confirmed', paid: true, actions: _canCheckIn),
+        _booking(status: 'checked_in', paid: true, actions: _canCheckOut),
       ]);
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
       await tester.pumpAndSettle();
 
-      expect(find.text('AS-0001 · Room 101'), findsOneWidget);
-      expect(find.text('Sok Dara'), findsOneWidget);
-      expect(find.text('Mon 2 Nov → Wed 4 Nov'), findsNWidgets(2));
-      expect(find.text('Waiting for payment'), findsWidgets); // the chip (the filter chip has the same words)
-      expect(find.text('AS-0002 · Room 202'), findsOneWidget);
-      expect(find.text('Paid'), findsOneWidget);
-      expect(find.text('\$30'), findsNWidgets(2));
+      await tester.tap(find.byKey(const Key('quick-check-out-1')));
+      await tester.pumpAndSettle();
+      expect(fake.checkOuts, isEmpty); // asks first
+
+      await tester.tap(find.byKey(const Key('quick-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(fake.checkOuts, [1]);
+      expect(find.byKey(const Key('quick-check-out-1')), findsNothing);
     });
 
-    testWidgets('tapping scan opens the QR scanner screen and demo scan works', (tester) async {
+    testWidgets('a paid guest can be checked in from the list', (tester) async {
       _tallScreen(tester);
-      final fake = _FakeStaffBookings([_booking(id: 6, guest: 'Test Guest', room: '202')]);
+      final fake = _FakeStaffBookings([
+        _booking(status: 'confirmed', paid: true, actions: _canCheckIn),
+      ]);
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('open-camera-scanner')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('open-camera-scanner')));
+      await tester.tap(find.byKey(const Key('quick-check-in-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('quick-confirm')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Scan guest QR'), findsOneWidget);
-      expect(find.byKey(const Key('demo-scan-button')), findsOneWidget);
-
-      await tester.tap(find.byKey(const Key('demo-scan-button')));
-      await tester.pumpAndSettle();
-
-      // The scan shows who it is, in a sheet, with the action for the chosen mode.
-      expect(find.byKey(const Key('scan-guest')), findsOneWidget);
-      expect(find.text('Test Guest'), findsOneWidget);
+      expect(fake.checkIns, [1]);
     });
 
+    testWidgets('a booking with no action has no quick button', (tester) async {
+      _tallScreen(tester);
+      final fake = _FakeStaffBookings([
+        _booking(status: 'checked_out', paid: true, actions: _nothing),
+      ]);
+      await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('quick-check-out-1')), findsNothing);
+      expect(find.byKey(const Key('quick-check-in-1')), findsNothing);
+    });
+  });
+
+  group('booking list', () {
+    testWidgets(
+      'shows the code, room, guest, dates, status, price and a Paid chip',
+      (tester) async {
+        _tallScreen(tester);
+        final fake = _FakeStaffBookings([
+          _booking(id: 1, guest: 'Sok Dara', room: '101'),
+          _booking(
+            id: 2,
+            guest: 'Chan Vanna',
+            room: '202',
+            status: 'confirmed',
+            paid: true,
+            actions: _canCheckIn,
+          ),
+        ]);
+        await tester.pumpWidget(
+          await _screen(const StaffBookingsScreen(), fake),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('AS-0001 · Room 101'), findsOneWidget);
+        expect(find.text('Sok Dara'), findsOneWidget);
+        expect(find.text('Mon 2 Nov → Wed 4 Nov'), findsNWidgets(2));
+        expect(
+          find.text('Waiting for payment'),
+          findsWidgets,
+        ); // the chip (the filter chip has the same words)
+        expect(find.text('AS-0002 · Room 202'), findsOneWidget);
+        expect(find.text('Paid'), findsOneWidget);
+        expect(find.text('\$30'), findsNWidgets(2));
+      },
+    );
+
+    testWidgets(
+      'tapping scan opens the QR scanner screen and demo scan works',
+      (tester) async {
+        _tallScreen(tester);
+        final fake = _FakeStaffBookings([
+          _booking(id: 6, guest: 'Test Guest', room: '202'),
+        ]);
+        await tester.pumpWidget(
+          await _screen(const StaffBookingsScreen(), fake),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('open-camera-scanner')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('open-camera-scanner')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Scan guest QR'), findsOneWidget);
+        expect(find.byKey(const Key('demo-scan-button')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('demo-scan-button')));
+        await tester.pumpAndSettle();
+
+        // The scan shows who it is, in a sheet, with the action for the chosen mode.
+        expect(find.byKey(const Key('scan-guest')), findsOneWidget);
+        expect(find.text('Test Guest'), findsOneWidget);
+      },
+    );
+
     testWidgets('an empty list says so', (tester) async {
-      await tester.pumpWidget(await _screen(const StaffBookingsScreen(), _FakeStaffBookings([])));
+      await tester.pumpWidget(
+        await _screen(const StaffBookingsScreen(), _FakeStaffBookings([])),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('No bookings found.'), findsOneWidget);
     });
 
-    testWidgets('a list that cannot load shows the error and Retry', (tester) async {
+    testWidgets('a list that cannot load shows the error and Retry', (
+      tester,
+    ) async {
       final fake = _FakeStaffBookings([_booking()])
-        ..listError = const ApiError('Staff and admin can only use the app on the hotel network.', statusCode: 403);
+        ..listError = const ApiError(
+          'Staff and admin can only use the app on the hotel network.',
+          statusCode: 403,
+        );
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
       await tester.pumpAndSettle();
 
@@ -317,11 +463,19 @@ void main() {
       expect(find.text('AS-0001 · Room 101'), findsOneWidget);
     });
 
-    testWidgets('searching asks the server once, after the typing stops', (tester) async {
+    testWidgets('searching asks the server once, after the typing stops', (
+      tester,
+    ) async {
       _tallScreen(tester);
       final fake = _FakeStaffBookings([
         _booking(id: 1, guest: 'Sok Dara', room: '101'),
-        _booking(id: 2, guest: 'Chan Vanna', room: '202', phone: '099888777', email: 'vanna@example.org'),
+        _booking(
+          id: 2,
+          guest: 'Chan Vanna',
+          room: '202',
+          phone: '099888777',
+          email: 'vanna@example.org',
+        ),
       ]);
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
       await tester.pumpAndSettle();
@@ -330,7 +484,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.enterText(find.byKey(const Key('booking-search')), 'dara');
       await tester.pump(const Duration(milliseconds: 100));
-      expect(fake.listCalls.map((c) => c.search).toList(), ['']); // nothing asked yet
+      expect(fake.listCalls.map((c) => c.search).toList(), [
+        '',
+      ]); // nothing asked yet
 
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
@@ -342,11 +498,17 @@ void main() {
 
     testWidgets('a booking code finds the booking', (tester) async {
       _tallScreen(tester);
-      final fake = _FakeStaffBookings([_booking(id: 1), _booking(id: 12, guest: 'Chan Vanna', room: '202')]);
+      final fake = _FakeStaffBookings([
+        _booking(id: 1),
+        _booking(id: 12, guest: 'Chan Vanna', room: '202'),
+      ]);
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byKey(const Key('booking-search')), 'AS-0012');
+      await tester.enterText(
+        find.byKey(const Key('booking-search')),
+        'AS-0012',
+      );
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
@@ -354,30 +516,50 @@ void main() {
       expect(find.text('AS-0001 · Room 101'), findsNothing);
     });
 
-    testWidgets('the clear button empties the search and shows everything again', (tester) async {
-      _tallScreen(tester);
-      final fake = _FakeStaffBookings([_booking(id: 1), _booking(id: 2, guest: 'Chan Vanna', room: '202')]);
-      await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'the clear button empties the search and shows everything again',
+      (tester) async {
+        _tallScreen(tester);
+        final fake = _FakeStaffBookings([
+          _booking(id: 1),
+          _booking(id: 2, guest: 'Chan Vanna', room: '202'),
+        ]);
+        await tester.pumpWidget(
+          await _screen(const StaffBookingsScreen(), fake),
+        );
+        await tester.pumpAndSettle();
 
-      await tester.enterText(find.byKey(const Key('booking-search')), 'vanna');
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pumpAndSettle();
-      expect(find.text('AS-0001 · Room 101'), findsNothing);
+        await tester.enterText(
+          find.byKey(const Key('booking-search')),
+          'vanna',
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pumpAndSettle();
+        expect(find.text('AS-0001 · Room 101'), findsNothing);
 
-      await tester.tap(find.byIcon(Icons.clear));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.clear));
+        await tester.pumpAndSettle();
 
-      expect(find.text('AS-0001 · Room 101'), findsOneWidget);
-      expect(find.text('AS-0002 · Room 202'), findsOneWidget);
-      expect(fake.listCalls.last.search, '');
-    });
+        expect(find.text('AS-0001 · Room 101'), findsOneWidget);
+        expect(find.text('AS-0002 · Room 202'), findsOneWidget);
+        expect(fake.listCalls.last.search, '');
+      },
+    );
 
-    testWidgets('a status chip filters, and All shows everything again', (tester) async {
+    testWidgets('a status chip filters, and All shows everything again', (
+      tester,
+    ) async {
       _tallScreen(tester);
       final fake = _FakeStaffBookings([
         _booking(id: 1, status: 'pending'),
-        _booking(id: 2, guest: 'Chan Vanna', room: '202', status: 'confirmed', paid: true, actions: _canCheckIn),
+        _booking(
+          id: 2,
+          guest: 'Chan Vanna',
+          room: '202',
+          status: 'confirmed',
+          paid: true,
+          actions: _canCheckIn,
+        ),
       ]);
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
       await tester.pumpAndSettle();
@@ -388,102 +570,152 @@ void main() {
       expect(fake.listCalls.last.status, 'confirmed');
       expect(find.text('AS-0002 · Room 202'), findsOneWidget);
       expect(find.text('AS-0001 · Room 101'), findsNothing);
-      expect(tester.widget<ChoiceChip>(find.byKey(const Key('filter-confirmed'))).selected, isTrue);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('filter-confirmed')))
+            .selected,
+        isTrue,
+      );
 
       await tester.tap(find.byKey(const Key('filter-all')));
       await tester.pumpAndSettle();
 
       expect(fake.listCalls.last.status, isNull);
       expect(find.text('AS-0001 · Room 101'), findsOneWidget);
-      expect(tester.widget<ChoiceChip>(find.byKey(const Key('filter-all'))).selected, isTrue);
+      expect(
+        tester.widget<ChoiceChip>(find.byKey(const Key('filter-all'))).selected,
+        isTrue,
+      );
     });
   });
 
   group('booking detail', () {
-    Future<_FakeStaffBookings> openDetail(WidgetTester tester, StaffBooking booking, {_FakeStaffBookings? fake}) async {
+    Future<_FakeStaffBookings> openDetail(
+      WidgetTester tester,
+      StaffBooking booking, {
+      _FakeStaffBookings? fake,
+    }) async {
       _tallScreen(tester);
       final server = fake ?? _FakeStaffBookings([booking]);
-      await tester.pumpWidget(await _screen(const StaffBookingsScreen(), server));
+      await tester.pumpWidget(
+        await _screen(const StaffBookingsScreen(), server),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(Key('booking-${booking.id}')));
       await tester.pumpAndSettle();
       return server;
     }
 
-    testWidgets('an unpaid booking shows the guest, the amount to collect and the payment button only', (tester) async {
-      await openDetail(tester, _booking());
+    testWidgets(
+      'an unpaid booking shows the guest, the amount to collect and the payment button only',
+      (tester) async {
+        await openDetail(tester, _booking());
 
-      expect(find.byType(StaffBookingDetailScreen), findsOneWidget);
-      expect(find.byKey(const Key('detail-code')), findsOneWidget);
-      expect(find.text('Sok Dara'), findsOneWidget);
-      expect(find.text('012345678'), findsOneWidget);
-      expect(find.text('dara@example.com'), findsOneWidget);
-      expect(find.text('Single · Room 101'), findsOneWidget);
-      expect(find.text('Not paid yet. \$30 to collect.'), findsOneWidget);
+        expect(find.byType(StaffBookingDetailScreen), findsOneWidget);
+        expect(find.byKey(const Key('detail-code')), findsOneWidget);
+        expect(find.text('Sok Dara'), findsOneWidget);
+        expect(find.text('012345678'), findsOneWidget);
+        expect(find.text('dara@example.com'), findsOneWidget);
+        expect(find.text('Single · Room 101'), findsOneWidget);
+        expect(find.text('Not paid yet. \$30 to collect.'), findsOneWidget);
 
-      expect(find.byKey(const Key('take-payment')), findsOneWidget);
-      expect(find.text('Take payment (\$30)'), findsOneWidget);
-      expect(find.byKey(const Key('check-in')), findsNothing);
-      expect(find.byKey(const Key('check-out')), findsNothing);
-    });
+        expect(find.byKey(const Key('take-payment')), findsOneWidget);
+        expect(find.text('Take payment (\$30)'), findsOneWidget);
+        expect(find.byKey(const Key('check-in')), findsNothing);
+        expect(find.byKey(const Key('check-out')), findsNothing);
+      },
+    );
 
-    testWidgets('taking payment: choose a method, confirm, and the booking shows who received the money', (tester) async {
-      final fake = await openDetail(tester, _booking());
+    testWidgets(
+      'taking payment: choose a method, confirm, and the booking shows who received the money',
+      (tester) async {
+        final fake = await openDetail(tester, _booking());
 
-      await tester.tap(find.byKey(const Key('take-payment')));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('take-payment')));
+        await tester.pumpAndSettle();
 
-      expect(find.byType(TakePaymentScreen), findsOneWidget);
-      expect(find.byKey(const Key('amount')), findsOneWidget);
-      expect(find.text('\$30'), findsWidgets);
-      expect(find.textContaining('No discount at the hotel'), findsOneWidget);
-      expect(find.text('Guest paid \$30 by Cash'), findsOneWidget); // cash is the first choice
-      expect(find.byKey(const Key('qr')), findsNothing);
+        expect(find.byType(TakePaymentScreen), findsOneWidget);
+        expect(find.byKey(const Key('amount')), findsOneWidget);
+        expect(find.text('\$30'), findsWidgets);
+        expect(find.textContaining('No discount at the hotel'), findsOneWidget);
+        expect(
+          find.text('Guest paid \$30 by Cash'),
+          findsOneWidget,
+        ); // cash is the first choice
+        expect(find.byKey(const Key('qr')), findsNothing);
 
-      await tester.tap(find.text('KHQR'));
-      await tester.pump();
-      expect(find.byKey(const Key('qr')), findsOneWidget);
-      expect(find.text('Guest paid \$30 by KHQR'), findsOneWidget);
+        await tester.tap(find.text('KHQR'));
+        await tester.pump();
+        expect(find.byKey(const Key('qr')), findsOneWidget);
+        expect(find.text('Guest paid \$30 by KHQR'), findsOneWidget);
 
-      await tester.tap(find.text('Card'));
-      await tester.pump();
-      expect(find.byKey(const Key('qr')), findsNothing);
-      expect(find.text('Guest paid \$30 by Card'), findsOneWidget);
+        await tester.tap(find.text('Card'));
+        await tester.pump();
+        expect(find.byKey(const Key('qr')), findsNothing);
+        expect(find.text('Guest paid \$30 by Card'), findsOneWidget);
 
-      await tester.tap(find.text('KHQR'));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('confirm-payment')));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('KHQR'));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('confirm-payment')));
+        await tester.pumpAndSettle();
 
-      expect(fake.payments, [(id: 1, method: 'khqr')]);
-      expect(find.byType(TakePaymentScreen), findsNothing);
-      expect(find.text('Payment of \$30 saved (KHQR).'), findsOneWidget);
-      expect(find.textContaining('Paid \$30 by KHQR, received by Front Desk'), findsOneWidget);
-      expect(find.byKey(const Key('take-payment')), findsNothing);
-      expect(find.byKey(const Key('check-in')), findsOneWidget); // now they can check in
-    });
+        expect(fake.payments, [(id: 1, method: 'khqr')]);
+        expect(find.byType(TakePaymentScreen), findsNothing);
+        expect(find.text('Payment of \$30 saved (KHQR).'), findsOneWidget);
+        expect(
+          find.textContaining('Paid \$30 by KHQR, received by Front Desk'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('take-payment')), findsNothing);
+        expect(
+          find.byKey(const Key('check-in')),
+          findsOneWidget,
+        ); // now they can check in
+      },
+    );
 
-    testWidgets('a payment the server refuses shows its message and keeps the screen', (tester) async {
-      final fake = _FakeStaffBookings([_booking()])
-        ..error = const ApiError('This booking is already paid.', statusCode: 409, code: 'already_paid');
-      await openDetail(tester, _booking(), fake: fake);
+    testWidgets(
+      'a payment the server refuses shows its message and keeps the screen',
+      (tester) async {
+        final fake = _FakeStaffBookings([_booking()])
+          ..error = const ApiError(
+            'This booking is already paid.',
+            statusCode: 409,
+            code: 'already_paid',
+          );
+        await openDetail(tester, _booking(), fake: fake);
 
-      await tester.tap(find.byKey(const Key('take-payment')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('confirm-payment')));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('take-payment')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('confirm-payment')));
+        await tester.pumpAndSettle();
 
-      expect(find.text('This booking is already paid.'), findsOneWidget);
-      expect(find.byType(TakePaymentScreen), findsOneWidget);
-      expect(fake.payments, isEmpty);
-    });
+        expect(find.text('This booking is already paid.'), findsOneWidget);
+        expect(find.byType(TakePaymentScreen), findsOneWidget);
+        expect(fake.payments, isEmpty);
+      },
+    );
 
-    testWidgets('check-in asks first, then saves and shows who did it', (tester) async {
+    testWidgets('check-in asks first, then saves and shows who did it', (
+      tester,
+    ) async {
       final fake = await openDetail(
         tester,
-        _booking(status: 'confirmed', paid: true, actions: _canCheckIn, payments: [
-          StaffPayment(id: 1, amount: 30, method: 'cash', status: 'paid', receivedBy: _frontDesk, paidAt: DateTime.utc(2026, 11, 2, 3)),
-        ]),
+        _booking(
+          status: 'confirmed',
+          paid: true,
+          actions: _canCheckIn,
+          payments: [
+            StaffPayment(
+              id: 1,
+              amount: 30,
+              method: 'cash',
+              status: 'paid',
+              receivedBy: _frontDesk,
+              paidAt: DateTime.utc(2026, 11, 2, 3),
+            ),
+          ],
+        ),
       );
 
       expect(find.byKey(const Key('take-payment')), findsNothing);
@@ -504,8 +736,13 @@ void main() {
       expect(find.byKey(const Key('check-out')), findsOneWidget);
     });
 
-    testWidgets('saying Cancel in the question changes nothing', (tester) async {
-      final fake = await openDetail(tester, _booking(status: 'confirmed', paid: true, actions: _canCheckIn));
+    testWidgets('saying Cancel in the question changes nothing', (
+      tester,
+    ) async {
+      final fake = await openDetail(
+        tester,
+        _booking(status: 'confirmed', paid: true, actions: _canCheckIn),
+      );
 
       await tester.tap(find.byKey(const Key('check-in')));
       await tester.pumpAndSettle();
@@ -516,26 +753,45 @@ void main() {
       expect(find.byKey(const Key('check-in')), findsOneWidget);
     });
 
-    testWidgets('a paid booking before its check-in date says when check-in opens', (tester) async {
-      await openDetail(
-        tester,
-        _booking(
-          status: 'confirmed',
-          paid: true,
-          checkIn: DateTime.utc(2026, 11, 9),
-          actions: const BookingActions(canTakePayment: false, canCheckIn: false, checkInProblem: 'Check-in opens on Mon 9 Nov.', canCheckOut: false),
-        ),
-      );
+    testWidgets(
+      'a paid booking before its check-in date says when check-in opens',
+      (tester) async {
+        await openDetail(
+          tester,
+          _booking(
+            status: 'confirmed',
+            paid: true,
+            checkIn: DateTime.utc(2026, 11, 9),
+            actions: const BookingActions(
+              canTakePayment: false,
+              canCheckIn: false,
+              checkInProblem: 'Check-in opens on Mon 9 Nov.',
+              canCheckOut: false,
+            ),
+          ),
+        );
 
-      expect(find.byKey(const Key('check-in')), findsNothing);
-      expect(find.byKey(const Key('check-in-problem')), findsOneWidget);
-      expect(find.text('Check-in opens on Mon 9 Nov.'), findsOneWidget);
-    });
+        expect(find.byKey(const Key('check-in')), findsNothing);
+        expect(find.byKey(const Key('check-in-problem')), findsOneWidget);
+        expect(find.text('Check-in opens on Mon 9 Nov.'), findsOneWidget);
+      },
+    );
 
     testWidgets('a refused check-in shows the server message', (tester) async {
-      final fake = _FakeStaffBookings([_booking(status: 'confirmed', paid: true, actions: _canCheckIn)])
-        ..error = const ApiError('This stay is already over.', statusCode: 422, code: 'cannot_check_in');
-      await openDetail(tester, _booking(status: 'confirmed', paid: true, actions: _canCheckIn), fake: fake);
+      final fake =
+          _FakeStaffBookings([
+              _booking(status: 'confirmed', paid: true, actions: _canCheckIn),
+            ])
+            ..error = const ApiError(
+              'This stay is already over.',
+              statusCode: 422,
+              code: 'cannot_check_in',
+            );
+      await openDetail(
+        tester,
+        _booking(status: 'confirmed', paid: true, actions: _canCheckIn),
+        fake: fake,
+      );
 
       await tester.tap(find.byKey(const Key('check-in')));
       await tester.pumpAndSettle();
@@ -545,10 +801,17 @@ void main() {
       expect(find.text('This stay is already over.'), findsOneWidget);
     });
 
-    testWidgets('check-out asks first, then saves and shows who did it', (tester) async {
+    testWidgets('check-out asks first, then saves and shows who did it', (
+      tester,
+    ) async {
       final fake = await openDetail(
         tester,
-        _booking(status: 'checked_in', paid: true, actions: _canCheckOut, checkedInBy: _frontDesk),
+        _booking(
+          status: 'checked_in',
+          paid: true,
+          actions: _canCheckOut,
+          checkedInBy: _frontDesk,
+        ),
       );
 
       expect(find.byKey(const Key('check-in')), findsNothing);
@@ -570,7 +833,13 @@ void main() {
     testWidgets('a finished stay has no buttons at all', (tester) async {
       await openDetail(
         tester,
-        _booking(status: 'checked_out', paid: true, actions: _nothing, checkedInBy: _frontDesk, checkedOutBy: _frontDesk),
+        _booking(
+          status: 'checked_out',
+          paid: true,
+          actions: _nothing,
+          checkedInBy: _frontDesk,
+          checkedOutBy: _frontDesk,
+        ),
       );
 
       expect(find.byKey(const Key('take-payment')), findsNothing);
@@ -582,7 +851,9 @@ void main() {
 
     testWidgets('going back to the list shows the new status', (tester) async {
       _tallScreen(tester);
-      final fake = _FakeStaffBookings([_booking(status: 'confirmed', paid: true, actions: _canCheckIn)]);
+      final fake = _FakeStaffBookings([
+        _booking(status: 'confirmed', paid: true, actions: _canCheckIn),
+      ]);
       await tester.pumpWidget(await _screen(const StaffBookingsScreen(), fake));
       await tester.pumpAndSettle();
 
@@ -605,64 +876,99 @@ void main() {
   group('online payments, as staff see them', () {
     Future<void> openDetail(WidgetTester tester, StaffBooking booking) async {
       _tallScreen(tester);
-      await tester.pumpWidget(await _screen(const StaffBookingsScreen(), _FakeStaffBookings([booking])));
+      await tester.pumpWidget(
+        await _screen(
+          const StaffBookingsScreen(),
+          _FakeStaffBookings([booking]),
+        ),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(Key('booking-${booking.id}')));
       await tester.pumpAndSettle();
     }
 
-    testWidgets('a booking paid online shows the discount and the payment, with nobody "receiving" it', (tester) async {
-      await openDetail(
-        tester,
-        _booking(
-          status: 'confirmed',
-          paid: true,
+    testWidgets(
+      'a booking paid online shows the discount and the payment, with nobody "receiving" it',
+      (tester) async {
+        await openDetail(
+          tester,
+          _booking(
+            status: 'confirmed',
+            paid: true,
+            choice: 'online',
+            discountPercent: 15,
+            discountAmount: 4.5,
+            actions: _canCheckIn,
+            payments: [
+              StaffPayment(
+                id: 1,
+                amount: 25.5,
+                method: 'online',
+                status: 'paid',
+                receivedBy: null,
+                paidAt: DateTime.utc(2026, 11, 2, 3),
+              ),
+            ],
+          ),
+        );
+
+        expect(find.text('Online discount 15%: -\$4.50'), findsOneWidget);
+        expect(find.textContaining('Paid \$25.50 by Online'), findsOneWidget);
+        expect(find.textContaining('received by'), findsNothing);
+        expect(find.byKey(const Key('paying-online-note')), findsNothing);
+        expect(find.byKey(const Key('take-payment')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a guest who started paying online is flagged before staff take the payment',
+      (tester) async {
+        await openDetail(
+          tester,
+          _booking(choice: 'online', discountPercent: 15, discountAmount: 4.5),
+        );
+
+        expect(find.byKey(const Key('paying-online-note')), findsOneWidget);
+        expect(find.textContaining('started paying online'), findsOneWidget);
+        expect(find.textContaining('full \$30'), findsOneWidget);
+        expect(find.byKey(const Key('take-payment')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'a guest who chose the hotel gets no online note and no discount line',
+      (tester) async {
+        await openDetail(tester, _booking());
+
+        expect(find.byKey(const Key('paying-online-note')), findsNothing);
+        expect(find.byKey(const Key('discount-line')), findsNothing);
+      },
+    );
+
+    test(
+      'StaffBooking reads the discount and knows when a guest is paying online',
+      () {
+        final base = _booking(
           choice: 'online',
           discountPercent: 15,
           discountAmount: 4.5,
-          actions: _canCheckIn,
-          payments: [
-            StaffPayment(id: 1, amount: 25.5, method: 'online', status: 'paid', receivedBy: null, paidAt: DateTime.utc(2026, 11, 2, 3)),
-          ],
-        ),
-      );
+        );
 
-      expect(find.text('Online discount 15%: -\$4.50'), findsOneWidget);
-      expect(find.textContaining('Paid \$25.50 by Online'), findsOneWidget);
-      expect(find.textContaining('received by'), findsNothing);
-      expect(find.byKey(const Key('paying-online-note')), findsNothing);
-      expect(find.byKey(const Key('take-payment')), findsNothing);
-    });
+        expect(base.discountPercent, 15);
+        expect(base.discountAmount, 4.5);
+        expect(base.isPayingOnline, isTrue);
 
-    testWidgets('a guest who started paying online is flagged before staff take the payment', (tester) async {
-      await openDetail(
-        tester,
-        _booking(choice: 'online', discountPercent: 15, discountAmount: 4.5),
-      );
-
-      expect(find.byKey(const Key('paying-online-note')), findsOneWidget);
-      expect(find.textContaining('started paying online'), findsOneWidget);
-      expect(find.textContaining('full \$30'), findsOneWidget);
-      expect(find.byKey(const Key('take-payment')), findsOneWidget);
-    });
-
-    testWidgets('a guest who chose the hotel gets no online note and no discount line', (tester) async {
-      await openDetail(tester, _booking());
-
-      expect(find.byKey(const Key('paying-online-note')), findsNothing);
-      expect(find.byKey(const Key('discount-line')), findsNothing);
-    });
-
-    test('StaffBooking reads the discount and knows when a guest is paying online', () {
-      final base = _booking(choice: 'online', discountPercent: 15, discountAmount: 4.5);
-
-      expect(base.discountPercent, 15);
-      expect(base.discountAmount, 4.5);
-      expect(base.isPayingOnline, isTrue);
-
-      expect(_booking(choice: 'online', status: 'confirmed', paid: true).isPayingOnline, isFalse);
-      expect(_booking(choice: 'hotel').isPayingOnline, isFalse);
-      expect(_booking(choice: null).isPayingOnline, isFalse);
-    });
+        expect(
+          _booking(
+            choice: 'online',
+            status: 'confirmed',
+            paid: true,
+          ).isPayingOnline,
+          isFalse,
+        );
+        expect(_booking(choice: 'hotel').isPayingOnline, isFalse);
+        expect(_booking(choice: null).isPayingOnline, isFalse);
+      },
+    );
   });
 }

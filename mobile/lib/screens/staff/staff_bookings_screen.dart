@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/auth_provider.dart';
+import '../../core/api_error.dart';
 import '../../core/format.dart';
 import '../../models/staff_booking.dart';
 import '../../staff/staff_booking_repository.dart';
@@ -53,6 +54,45 @@ class _StaffBookingsScreenState extends ConsumerState<StaffBookingsScreen> {
     });
   }
 
+  /// Check in or out straight from the list, no QR scan needed.
+  Future<void> _quick(StaffBooking b, {required bool checkIn}) async {
+    final verb = checkIn ? 'Check in' : 'Check out';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(verb),
+        content: Text(
+          '$verb ${b.guestName} ${checkIn ? 'to' : 'from'} room ${b.roomNumber}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('quick-confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(verb),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final repo = ref.read(staffBookingRepositoryProvider);
+      await (checkIn ? repo.checkIn(b.id) : repo.checkOut(b.id));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${b.guestName} is checked ${checkIn ? 'in' : 'out'}.'),
+        ),
+      );
+    } on ApiError catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+    ref.invalidate(staffBookingsProvider);
+  }
+
   Future<void> _open(StaffBooking booking) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -85,20 +125,20 @@ class _StaffBookingsScreenState extends ConsumerState<StaffBookingsScreen> {
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _search.text.isEmpty
                     ? (isStaff
-                        ? IconButton(
-                            key: const Key('open-camera-scanner'),
-                            tooltip: 'Scan QR Code Voucher',
-                            icon: Icon(
-                              Icons.qr_code_scanner,
-                              color: context.pal.accent,
-                            ),
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const QrScannerScreen(),
+                          ? IconButton(
+                              key: const Key('open-camera-scanner'),
+                              tooltip: 'Scan QR Code Voucher',
+                              icon: Icon(
+                                Icons.qr_code_scanner,
+                                color: context.pal.accent,
                               ),
-                            ),
-                          )
-                        : null)
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const QrScannerScreen(),
+                                ),
+                              ),
+                            )
+                          : null)
                     : IconButton(
                         tooltip: 'Clear search',
                         icon: const Icon(Icons.clear),
@@ -173,7 +213,11 @@ class _StaffBookingsScreenState extends ConsumerState<StaffBookingsScreen> {
                     itemCount: list.length,
                     itemBuilder: (context, i) => FadeSlideIn(
                       index: i,
-                      child: _BookingTile(booking: list[i], onTap: () => _open(list[i])),
+                      child: _BookingTile(
+                        booking: list[i],
+                        onTap: () => _open(list[i]),
+                        onQuick: (checkIn) => _quick(list[i], checkIn: checkIn),
+                      ),
                     ),
                   );
                 },
@@ -206,23 +250,43 @@ class _StaffBookingsScreenState extends ConsumerState<StaffBookingsScreen> {
 class _BookingTile extends StatelessWidget {
   final StaffBooking booking;
   final VoidCallback onTap;
-  const _BookingTile({required this.booking, required this.onTap});
+  final void Function(bool checkIn) onQuick;
+  const _BookingTile({
+    required this.booking,
+    required this.onTap,
+    required this.onQuick,
+  });
 
   @override
   Widget build(BuildContext context) {
     final b = booking;
     final pal = context.pal;
     final isPaid = b.paid;
-    final isCancelledOrNoShow = b.status == 'cancelled' || b.status == 'no_show';
-    final payText = isPaid ? 'Paid' : (isCancelledOrNoShow ? 'Not paid' : 'Not paid yet');
+    final isCancelledOrNoShow =
+        b.status == 'cancelled' || b.status == 'no_show';
+    final payText = isPaid
+        ? 'Paid'
+        : (isCancelledOrNoShow ? 'Not paid' : 'Not paid yet');
 
     final (badgeBg, badgeBorder, badgeFg, badgeIcon) = isPaid
-        ? (pal.successWash, pal.successBorder, pal.success, Icons.check_circle_rounded)
+        ? (
+            pal.successWash,
+            pal.successBorder,
+            pal.success,
+            Icons.check_circle_rounded,
+          )
         : isCancelledOrNoShow
-            ? (pal.surfaceAlt, pal.border, pal.textMuted, Icons.remove_circle_outline)
-            : (pal.goldWash, pal.goldSoft, pal.goldDeep, Icons.schedule_rounded);
+        ? (
+            pal.surfaceAlt,
+            pal.border,
+            pal.textMuted,
+            Icons.remove_circle_outline,
+          )
+        : (pal.goldWash, pal.goldSoft, pal.goldDeep, Icons.schedule_rounded);
 
-    final initial = b.guestName.trim().isEmpty ? '?' : b.guestName.trim()[0].toUpperCase();
+    final initial = b.guestName.trim().isEmpty
+        ? '?'
+        : b.guestName.trim()[0].toUpperCase();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -284,7 +348,10 @@ class _BookingTile extends StatelessWidget {
                           ),
                           Text(
                             '${formatShortDate(b.checkIn)} → ${formatShortDate(b.checkOut)}',
-                            style: TextStyle(fontSize: 13, color: pal.textMuted),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: pal.textMuted,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Wrap(
@@ -294,7 +361,10 @@ class _BookingTile extends StatelessWidget {
                             children: [
                               StatusChip(b.status),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 5,
+                                ),
                                 decoration: BoxDecoration(
                                   color: badgeBg,
                                   borderRadius: BorderRadius.circular(999),
@@ -318,6 +388,29 @@ class _BookingTile extends StatelessWidget {
                               ),
                             ],
                           ),
+                          if (b.actions.canCheckOut ||
+                              b.actions.canCheckIn) ...[
+                            const SizedBox(height: 10),
+                            FilledButton.tonalIcon(
+                              key: Key(
+                                b.actions.canCheckOut
+                                    ? 'quick-check-out-${b.id}'
+                                    : 'quick-check-in-${b.id}',
+                              ),
+                              onPressed: () => onQuick(!b.actions.canCheckOut),
+                              icon: Icon(
+                                b.actions.canCheckOut
+                                    ? Icons.logout
+                                    : Icons.login,
+                                size: 18,
+                              ),
+                              label: Text(
+                                b.actions.canCheckOut
+                                    ? 'Check out'
+                                    : 'Check in',
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

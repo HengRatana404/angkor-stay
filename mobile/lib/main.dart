@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth/auth_provider.dart';
 import 'core/api_client.dart';
+import 'core/auto_refresh.dart';
 import 'core/theme.dart';
 import 'core/theme_mode_provider.dart';
 import 'screens/guest_shell.dart';
@@ -80,7 +81,7 @@ class AngkorStayApp extends ConsumerWidget {
       theme: buildAngkorTheme(),
       darkTheme: buildAngkorTheme(Brightness.dark),
       themeMode: ref.watch(themeModeProvider),
-      home: const SplashGate(child: AuthGate()),
+      home: const AutoRefresh(child: SplashGate(child: AuthGate())),
     );
   }
 }
