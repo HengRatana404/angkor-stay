@@ -27,3 +27,7 @@ postman/specs/
 # Machine-specific files (tunnel address, local paths): stay on this PC
 start-hotel-server.bat
 scratch/
+
+# Kept on this computer only, not on GitHub
+docs/
+.scratch/

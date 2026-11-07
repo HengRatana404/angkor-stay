@@ -6,9 +6,8 @@ A hotel booking system with three kinds of users (guest, staff, admin). One Flut
 |---|---|---|
 | Mobile app | `mobile/` | Flutter 3, Riverpod, dio, Material 3 |
 | API | `backend/` | Laravel 13, PHP 8.3+, Sanctum tokens |
-| Database | PostgreSQL 18 | 10 tables, see `docs/database-diagram.png` |
+| Database | PostgreSQL 18 | 10 tables, made by the Laravel migrations in `backend/database/migrations/` |
 | API tests | `postman/` | 80 saved requests with tests |
-| Slides and diagram | `docs/` | slides outline, `.pptx`, database diagram |
 
 ## What it does
 
@@ -98,13 +97,6 @@ cd mobile  && flutter analyze           # no issues
 ## Postman
 
 Import `postman/angkor-stay.postman_collection.json` (no environment needed: every request has the full address), type the account emails and passwords in the collection's Variables tab, and run folders 0 to 7 in order. Details and screenshots: [postman/README.md](postman/README.md).
-
-## Slides and diagram
-
-- Database diagram: `docs/database-diagram.png` (code for dbdiagram.io: `docs/database.dbml`)
-- Slide text for Canva: `docs/slides-outline.md`
-- Slides as PowerPoint: `docs/Angkor-Stay-slides.pptx`
-- Phone screenshots: `docs/screenshots/app/`
 
 ## Security
 
