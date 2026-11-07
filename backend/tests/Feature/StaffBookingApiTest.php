@@ -416,10 +416,18 @@ class StaffBookingApiTest extends TestCase
 
     public function test_a_guest_can_check_in_in_the_middle_of_the_booked_stay(): void
     {
-        $booking = $this->makeBooking($this->guest(), ['in' => -1, 'out' => 2, 'status' => 'confirmed', 'hold' => null]);
-        $this->asStaff();
+        // Fixed morning clock: the no-show cutoff is noon the day after check-in,
+        // so with the real clock this test failed every day after 12:00.
+        \Illuminate\Support\Carbon::setTestNow(now()->setTime(9, 0));
 
-        $this->postJson("/api/staff/bookings/{$booking->id}/check-in")->assertOk();
+        try {
+            $booking = $this->makeBooking($this->guest(), ['in' => -1, 'out' => 2, 'status' => 'confirmed', 'hold' => null]);
+            $this->asStaff();
+
+            $this->postJson("/api/staff/bookings/{$booking->id}/check-in")->assertOk();
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
     }
 
     public function test_check_in_is_refused_before_the_check_in_date(): void

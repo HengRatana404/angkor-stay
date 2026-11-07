@@ -567,7 +567,9 @@ class _AdminPulseCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '$occupied of $total rooms in use',
+                (d != null && d.roomsMaintenance > 0)
+                    ? '$occupied of $total in use · ${d.roomsMaintenance} in maintenance'
+                    : '$occupied of $total rooms in use',
                 style: TextStyle(fontSize: 13, color: pal.textMuted),
               ),
             ),

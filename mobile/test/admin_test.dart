@@ -205,6 +205,8 @@ void main() {
       expect(find.byKey(const Key('staff-home-scan-fab')), findsNothing);
       expect(find.text('Scan Guest QR'), findsNothing);
       expect(find.text('Front desk'), findsNothing);
+      // rooms line names the rooms that are out of service, so "free" adds up
+      expect(find.text('4 of 15 in use · 1 in maintenance'), findsOneWidget);
     });
 
     testWidgets('staff do not get the admin tiles', (tester) async {
