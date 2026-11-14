@@ -1,0 +1,36 @@
+# Secrets never go to GitHub
+.env
+*.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local working notes: stays in the project folder, never goes to GitHub
+PROBLEM.md
+TODO.md
+DONE.md
+.playwright-mcp/
+
+# Postman app folders created when the project folder is opened in Postman
+.postman/
+postman/collections/
+postman/documents/
+postman/environments/
+postman/flows/
+postman/globals/
+postman/mocks/
+postman/specs/
+
+# Machine-specific files (tunnel address, local paths): stay on this PC
+start-hotel-server.bat
+scratch/
+
+# Kept on this computer only, not on GitHub
+docs/
+.scratch/
+
+# Build settings with the tunnel address and secret key: stay on this PC
+mobile/dart_defines.json

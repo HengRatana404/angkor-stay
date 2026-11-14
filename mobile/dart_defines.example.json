@@ -1,0 +1,4 @@
+{
+  "TUNNEL_URL": "https://your-tunnel.example/api",
+  "SERVER_INFO_KEY": "same value as SERVER_INFO_KEY in backend/.env"
+}
