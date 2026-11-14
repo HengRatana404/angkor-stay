@@ -222,6 +222,6 @@ No keys or passwords are in this repository. `backend/.env` is git-ignored; `bac
 - Sokhorn Samnang
 - Heng Ratana
 
-**Presentation slides:** [Angkor Stay.pdf](assets/presentation/Angkor%20Stay.pdf)<br>
+**Presentation slides:** https://canva.link/bg6cjwrgiuy1l0y<br>
 **Source code:** https://github.com/HengRatana404/angkor-stay<br>
-**Presentation video:** _link coming soon_
+**Presentation video:** https://youtu.be/g7TIa7ES1-U
