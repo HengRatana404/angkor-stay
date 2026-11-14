@@ -217,7 +217,7 @@ No keys or passwords are in this repository. `backend/.env` is git-ignored; `bac
 
 ## Group
 
-- [Sa Rosmy](https://github.com/Sarosmy)
+- Sa Rosmy
 - Meng Theth
 - Sokhorn Samnang
 - Heng Ratana
