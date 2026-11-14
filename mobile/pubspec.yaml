@@ -19,7 +19,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.13.5
+  # ^3.13.5 was newer than the local toolchain (Flutter 3.47.4 / Dart 3.13.3),
+  # which made `flutter pub get` fail with "version solving failed".
+  # Keep the lower bound at the SDK actually installed on this machine.
+  sdk: ^3.13.3
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
